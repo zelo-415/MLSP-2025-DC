@@ -14,21 +14,34 @@ from unet_model import UNet, UNetWithAttention
 input_path = "ICASSP2025_Dataset/Inputs/Task_2_ICASSP/"
 output_path = "ICASSP2025_Dataset/Outputs/Task_2_ICASSP/"
 
-all_file_names = [f"B{b}_Ant1_f1_S{s}" for b in range(1, 6) for s in range(10)]
-train_files, val_files = train_test_split(all_file_names, test_size=0.2, random_state=42)
+f1_files = [
+    f"B{b}_Ant1_f1_S{s}"
+    for b in range(1, 26)
+    for s in range(50)
+]
 
-train_loader = create_dataloader(train_files, input_path, output_path, batch_size=2)
-val_loader = create_dataloader(val_files, input_path, output_path, batch_size=1, shuffle=False)
+train_f1_files, val_files = train_test_split(f1_files, test_size=0.2, random_state=42)
 
-# dataloader = create_dataloader(file_names, input_path, output_path, batch_size=2)
+f2_f3_files = [
+    f"B{b}_Ant1_f{f}_S{s}"
+    for b in range(1, 26)
+    for f in range(2,4)
+    for s in range(50)
+]
+
+train_files = train_f1_files + f2_f3_files
+train_loader = create_dataloader(train_files, input_path, output_path, batch_size=2, shuffle=True)
+val_loader = create_dataloader(val_files, input_path, output_path, batch_size=2, shuffle=False)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# model = UNet().to(device)
-model = UNetWithAttention().to(device)
+model = UNet().to(device)
+# model = UNetWithAttention().to(device)
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
-def masked_rmse(pred, target, mask):
-    mse = ((pred - target) ** 2 * (1 - mask)).sum() / (1 - mask).sum()
+def masked_rmse(pred, target, mask, valid_mask, eps=1e-8):
+    eval_mask = (1 - mask) * valid_mask
+    squared_error = (pred - target) ** 2 * eval_mask
+    mse = squared_error.sum() / (eval_mask.sum() + eps)
     return torch.sqrt(mse)
 
 def evaluate(model, val_loader, device):
@@ -43,7 +56,7 @@ def evaluate(model, val_loader, device):
     return val_loss / len(val_loader)
 
 # ==== Train over multiple epochs ====
-epochs = 20
+epochs = 50
 train_losses = []
 val_losses = []
 
@@ -51,9 +64,9 @@ for epoch in range(epochs):
     model.train()
     epoch_loss = 0
     for batch in tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}"):
-        x, y, mask = [b.to(device) for b in batch]
+        x, y, mask, valid = [b.to(device) for b in batch]
         pred = model(x)
-        loss = masked_rmse(pred, y, mask)
+        loss = masked_rmse(pred, y, mask, valid)
 
         optimizer.zero_grad()
         loss.backward()

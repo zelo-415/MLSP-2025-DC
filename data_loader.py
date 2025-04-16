@@ -62,6 +62,11 @@ class PLDataset(Dataset):
         y = (y - self.pl_min) / (self.pl_max - self.pl_min)
         sparse_y = (sparse_y - self.pl_min) / (self.pl_max - self.pl_min)
 
+        # Record padding mask
+        valid = np.ones_like(y, dtype=np.float32)
+        valid = padding(valid, self.resize, pad_value=0)
+        valid = np.expand_dims(valid, axis=0)
+
         # Resize images
         target_size = self.resize
         if isinstance(target_size, int):
@@ -78,7 +83,7 @@ class PLDataset(Dataset):
         y = np.expand_dims(y, axis=0)
         mask = np.expand_dims(mask.astype(np.float32), axis=0)
 
-        return torch.from_numpy(X), torch.from_numpy(y), torch.from_numpy(mask)
+        return torch.from_numpy(X), torch.from_numpy(y), torch.from_numpy(mask), torch.from_numpy(valid)
 
 
 def create_dataloader(file_names, input_path, output_path, batch_size=4, shuffle=True):
