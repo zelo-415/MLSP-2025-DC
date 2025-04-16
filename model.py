@@ -17,23 +17,23 @@ class DoubleConv(nn.Module):
 class UNet(nn.Module):
     def __init__(self, in_channels=6, out_channels=1):  # 
         super().__init__()
-        self.enc1 = DoubleConv(in_channels, 96)
+        self.enc1 = DoubleConv(in_channels, 64)
         self.pool1 = nn.MaxPool2d(2)
-        self.enc2 = DoubleConv(96, 192)
+        self.enc2 = DoubleConv(64, 128)
         self.pool2 = nn.MaxPool2d(2)
-        self.enc3 = DoubleConv(192, 384)
+        self.enc3 = DoubleConv(128, 256)
         self.pool3 = nn.MaxPool2d(2)
 
-        self.bottleneck = DoubleConv(384, 768)
+        self.bottleneck = DoubleConv(256, 512)
 
-        self.up3 = nn.ConvTranspose2d(768, 384, kernel_size=2, stride=2)
-        self.dec3 = DoubleConv(768, 384)
-        self.up2 = nn.ConvTranspose2d(384, 192, kernel_size=2, stride=2)
-        self.dec2 = DoubleConv(384, 192)
-        self.up1 = nn.ConvTranspose2d(192, 96, kernel_size=2, stride=2)
-        self.dec1 = DoubleConv(192, 96)
+        self.up3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.dec3 = DoubleConv(512, 256)
+        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.dec2 = DoubleConv(256, 128)
+        self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.dec1 = DoubleConv(128, 64)
 
-        self.final_conv = nn.Conv2d(96, out_channels, kernel_size=1)
+        self.final_conv = nn.Conv2d(64, out_channels, kernel_size=1)
 
     def forward(self, x):
         e1 = self.enc1(x)

@@ -1,11 +1,9 @@
-# dataset.py
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 from PIL import Image
 import numpy as np
 from pathlib import Path
-import os
 import torch.nn.functional as F
 import pandas as pd
 
@@ -15,7 +13,6 @@ class RadioMapDataset(Dataset):
         self.outputs_dir = Path(outputs_dir)
         self.sparse_dir = Path(sparse_dir)
         self.positions_dir = Path(positions_dir)
-
         self.filenames = sorted([f.name for f in self.inputs_dir.glob("*.png")])
         self.to_tensor = transforms.ToTensor()
 
@@ -25,36 +22,38 @@ class RadioMapDataset(Dataset):
     def __getitem__(self, idx):
         fname = self.filenames[idx]
 
-        # Load RGB (3-channel physical input)
+        # === Load RGB input ===
         rgb = Image.open(self.inputs_dir / fname).convert("RGB")
         rgb_tensor = self.to_tensor(rgb)  # [3, H, W]
-        rgb_tensor[2] = 1.0 - rgb_tensor[2]
-        #rgb_tensor = rgb_tensor[0:2]
-        # Load GT PL map (grayscale)
-        gt = Image.open(self.outputs_dir / fname).convert("L")
-        gt_tensor = self.to_tensor(gt) 
+        rgb_tensor[2] = 1.0 - rgb_tensor[2]  # Flip blue channel
 
-        # Load sparse samples (x, y, pl)
+        # === Load Ground Truth ===
+        gt = Image.open(self.outputs_dir / fname).convert("L")
+        gt_tensor = self.to_tensor(gt)  # [1, H, W] (still normalized in 0-1 range)
+
+        # === Load sparse samples ===
         sparse_points = np.load(self.sparse_dir / (Path(fname).stem + ".npy"))
         h, w = gt_tensor.shape[1:]
         sparse_map = torch.zeros((1, h, w))
-        mask_map = torch.zeros((1, h, w))
-        for x, y, pl in sparse_points:
-            sparse_map[0, int(y), int(x)] = pl / 100.0  #normalization
-            mask_map[0, int(y), int(x)] = 1.0
+        mask_map = torch.ones((1, h, w))  # default: masked (1)
 
-        # Load Tx position and create Gaussian heatmap
+        for x, y, pl in sparse_points:
+            sparse_map[0, int(y), int(x)] = pl / 100.0  # normalize
+            mask_map[0, int(y), int(x)] = 0.0  # unmasked = supervised
+
+        # === Load Tx position and encode as Gaussian heatmap ===
         pos_file = self._find_position_file(fname)
         tx_x, tx_y = self._load_tx_xy(pos_file)
-        heatmap = self._generate_gaussian_heatmap(tx_x, tx_y, h, w, sigma=25.0).unsqueeze(0)  # [1, H, W]
+        heatmap = self._generate_gaussian_heatmap(tx_x, tx_y, h, w, sigma=25.0).unsqueeze(0)
 
-        # Stack all 6 channels (replace distance map with Gaussian heatmap)
-        #input_tensor = torch.cat([rgb_tensor, sparse_map, mask_map, heatmap], dim=0)  # [6, H, W]
-        input_tensor = torch.cat([rgb_tensor, sparse_map,heatmap], dim=0)  # [6, H, W]
-        # Padding
+        # === Stack input channels ===
+        input_tensor = torch.cat([rgb_tensor, sparse_map, heatmap], dim=0)  # [5, H, W]
+
+        # === Pad all tensors ===
         input_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, gt_tensor, mask_map)
 
-        return input_tensor, gt_tensor, mask_map
+        # === Return original size for loss crop ===
+        return input_tensor, gt_tensor, mask_map, (h, w)
 
     def pad_all(self, input_tensor, gt_tensor, mask_tensor):
         _, h, w = input_tensor.shape
@@ -63,13 +62,12 @@ class RadioMapDataset(Dataset):
 
         input_tensor = F.pad(input_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
         gt_tensor = F.pad(gt_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
-        mask_tensor = F.pad(mask_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
-
+        mask_tensor = F.pad(mask_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1.0)  # default: masked
         return input_tensor, gt_tensor, mask_tensor
 
     def _find_position_file(self, fname):
-        base = Path(fname).stem  # e.g., B3_Ant3_f1
-        building = base.split("_")[0]  # e.g., B3
+        base = Path(fname).stem
+        building = base.split("_")[0]
         pos_file = list(self.positions_dir.glob(f"Positions_{building}_*.csv"))
         if not pos_file:
             raise FileNotFoundError(f"No position file found for {fname}")

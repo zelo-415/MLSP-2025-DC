@@ -1,25 +1,26 @@
-# train.py
 import torch
-import torch.nn as nn
+import random
+import numpy as np
+from pathlib import Path
 from torch.utils.data import DataLoader, random_split
+from tqdm import tqdm
+import os
+
 from dataset1 import RadioMapDataset
 from model import UNet
 from utils import RMSELoss, save_checkpoint, custom_collate_fn
-from pathlib import Path
-from tqdm import tqdm
-import os
-import random
-import numpy as np
 
+# ==== 固定随机种子 ====
 def set_seed(seed=42):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
-    torch.backends.cudnn.deterministic = True  
-    torch.backends.cudnn.benchmark = False     
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 set_seed(42)
+
 # ==== Config ====
 data_root = Path("./")
 inputs_dir = data_root / "inputs"
@@ -32,13 +33,14 @@ epochs = 50
 lr = 1e-4
 val_ratio = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(f"Using device: {device}")
 
 # ==== Load dataset ====
 full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir)
 val_size = int(len(full_dataset) * val_ratio)
 train_size = len(full_dataset) - val_size
 generator = torch.Generator().manual_seed(42)
-train_set, val_set = random_split(full_dataset, [train_size, val_size],generator=generator)
+train_set, val_set = random_split(full_dataset, [train_size, val_size], generator=generator)
 
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_fn)
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
@@ -54,35 +56,44 @@ os.makedirs("checkpoints", exist_ok=True)
 
 for epoch in range(1, epochs + 1):
     model.train()
-    train_loss = 0
+    train_loss = 0.0
     loop = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}")
-    for inputs, targets, masks in loop:
+    for inputs, targets, masks, shapes in loop:
         inputs = inputs.to(device)
         targets = targets.to(device)
         masks = masks.to(device)
 
         preds = model(inputs)
-        loss = criterion(preds, targets, masks)
+
+        batch_loss = 0.0
+        for i in range(inputs.size(0)):
+            loss = criterion(preds[i], targets[i], masks[i], shapes[i])
+            batch_loss += loss
+
+        batch_loss /= inputs.size(0)
 
         optimizer.zero_grad()
-        loss.backward()
+        batch_loss.backward()
         optimizer.step()
 
-        train_loss += loss.item()
-        loop.set_postfix(train_loss=loss.item())
+        train_loss += batch_loss.item()
+        loop.set_postfix(train_loss=batch_loss.item())
 
     # Validation
     model.eval()
-    val_loss = 0
+    val_loss = 0.0
     with torch.no_grad():
-        for inputs, targets, masks in val_loader:
+        for inputs, targets, masks, shapes in val_loader:
             inputs = inputs.to(device)
             targets = targets.to(device)
             masks = masks.to(device)
-
             preds = model(inputs)
-            loss = criterion(preds, targets, masks)
-            val_loss += loss.item()
+
+            batch_loss = 0.0
+            for i in range(inputs.size(0)):
+                loss = criterion(preds[i], targets[i], masks[i], shapes[i])
+                batch_loss += loss
+            val_loss += (batch_loss / inputs.size(0)).item()
 
     avg_val_loss = val_loss / len(val_loader)
     print(f"Epoch {epoch}: Val RMSE = {avg_val_loss:.4f}")
