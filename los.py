@@ -1,11 +1,11 @@
 import numpy as np
+import pandas as pd
 from PIL import Image
 from torchvision import transforms
-import pandas as pd
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 def bresenham2D(x0, y0, x1, y1):
-    """返回从 (x0, y0) 到 (x1, y1) 的 Bresenham route"""
     dx = abs(x1 - x0)
     dy = abs(y1 - y0)
     x, y = x0, y0
@@ -34,20 +34,32 @@ def bresenham2D(x0, y0, x1, y1):
     points.append((x1, y1))
     return points
 
-def generate_los_map_nopad(rgb_path, tx_x, tx_y):
-    # 1. 加载图像并转换为 tensor
+def generate_los_map_from_path(rgb_path):
+    rgb_path = Path(rgb_path)
+    fname = rgb_path.stem  # e.g., B1_Ant1_f1_S0
+
+    # 解析出发射器 index，例如 S0 => 0
+    s_idx = int(fname.split("_")[-1][1:])  # 获取最后一个"Sx"，并提取数字
+
+    # 构建 position 文件路径
+    building = fname.split("_")[0]      # e.g., B1
+    antenna = fname.split("_")[1]       # e.g., Ant1
+    freq = fname.split("_")[2]          # e.g., f1
+    pos_file = Path(f"./Positions/Positions_{building}_{antenna}_{freq}.csv")
+
+    # 加载发射器坐标
+    df = pd.read_csv(pos_file)
+    tx_x = int(round(df.iloc[s_idx]['X']))
+    tx_y = int(round(df.iloc[s_idx]['Y']))
+
+    # 加载 RGB 图像并转 tensor
     to_tensor = transforms.ToTensor()
-    rgb = Image.open(rgb_path).convert("RGB")
-    rgb_tensor = to_tensor(rgb)  # shape [3, H, W]
-    
+    rgb_tensor = to_tensor(Image.open(rgb_path).convert("RGB"))
     R = rgb_tensor[0].numpy()
     G = rgb_tensor[1].numpy()
     H, W = R.shape
 
-    # 生成墙体 mask（1 表示有墙，0 表示无墙）
     wall_mask = ((R != 0) | (G != 0)).astype(np.uint8)
-
-    # 初始化 los_map
     los_map = np.ones((H, W), dtype=np.uint8)
 
     for y in range(H):
@@ -55,20 +67,22 @@ def generate_los_map_nopad(rgb_path, tx_x, tx_y):
             path = bresenham2D(tx_x, tx_y, x, y)
             for px, py in path:
                 if 0 <= px < W and 0 <= py < H:
-                    if wall_mask[py, px]:  
-                        los_map[y, x] = 0  # 被墙阻挡
-                        break  
+                    if wall_mask[py, px]:
+                        los_map[y, x] = 0
+                        break
 
-    return los_map  # 1 表示可达，0 表示不可达
+    return los_map
 
-rgb_path = "inputs/B1_Ant0_f1/S0.png"
-pos_file = "Positions/Positions_B1_0.csv"
+# 示例
+rgb_path = "./inputs/B1_Ant1_f1_S48.png"
+los = generate_los_map_from_path(rgb_path)
 
-df = pd.read_csv(pos_file)
-tx_x = int(round(df.iloc[0]['X']))
-tx_y = int(round(df.iloc[0]['Y']))
+# 可视化
+plt.imshow(los, cmap='gray')
+plt.title("LOS Map")
+plt.axis('off')
+plt.show()
 
-los = generate_los_map_nopad(rgb_path, tx_x, tx_y)
-
-# 保存为 .npy
-np.save("los_map/B1_Ant0_f1.npy", los)
+# 保存为 .npy 和 .png
+np.save("./los_maps/B1_Ant1_f1_S48.npy", los)
+plt.imsave("./los_maps/B1_Ant1_f1_S48.png", los, cmap='gray')
