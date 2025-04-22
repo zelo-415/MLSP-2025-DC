@@ -1,9 +1,24 @@
 import os
+import re
 import numpy as np
 import pandas as pd
 from PIL import Image
 from pathlib import Path
 from tqdm import tqdm
+def natural_key(text):
+    """B1 → B2 → B10"""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', text)]
+
+def extract_scene_and_index(filename):
+    """
+    B1_Ant1_f1_S0.png → ('B1_Ant1_f1', 0)
+    """
+    name = Path(filename).stem
+    parts = name.split('_')
+    scene = '_'.join(parts[:-1])
+    index = int(parts[-1][1:])  # S0 → 0
+    return scene, index
+
 
 def generate_wall_mask(png_path):
     img = Image.open(png_path).convert('RGB')
@@ -44,41 +59,46 @@ def generate_los_mask(wall_mask, tx_x, tx_y):
     for x in range(H):
         for y in range(W):
             path = bresenham_line(tx_x, tx_y, x, y)
-            blocked = any(wall_mask[px, py] == 1 for (px, py) in path if (px, py) != (tx_x, tx_y))
+            blocked = any(
+                0 <= px < H and 0 <= py < W and wall_mask[px, py] == 1
+                for (px, py) in path if (px, py) != (tx_x, tx_y)
+            )
             los_mask[x, y] = 0 if blocked else 1
     return los_mask
 
-def extract_scene_and_index(filename):
-
-    name = Path(filename).stem
-    parts = name.split('_')
-    scene = '_'.join(parts[:-1])
-    index = int(parts[-1][1:])  
-    return scene, index
-
 def process_all_inputs(input_dir, csv_dir, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    all_pngs = sorted(f for f in os.listdir(input_dir) if f.endswith(".png"))
+
+    all_pngs = sorted(
+        (f for f in os.listdir(input_dir) if f.endswith(".png")),
+        key=natural_key
+    )
 
     for fname in tqdm(all_pngs, desc="Processing Images"):
         scene_name, tx_index = extract_scene_and_index(fname)
         png_path = os.path.join(input_dir, fname)
         csv_path = os.path.join(csv_dir, f"Positions_{scene_name}.csv")
 
-
         pos_df = pd.read_csv(csv_path)
-     
-
-        tx_x, tx_y = int(pos_df.loc[tx_index, "X"]), int(pos_df.loc[tx_index, "Y"])
+        
+        tx_x, tx_y = int(pos_df.loc[tx_index, "X"])-1, int(pos_df.loc[tx_index, "Y"])-1
         wall_mask = generate_wall_mask(png_path)
-        los_mask = generate_los_mask(wall_mask, tx_x, tx_y)
 
+        H, W = wall_mask.shape
+        if not (0 <= tx_x < H and 0 <= tx_y < W):
+            
+            continue
+
+        los_mask = generate_los_mask(wall_mask, tx_x, tx_y)
         out_path = os.path.join(output_dir, f"{scene_name}_S{tx_index}_los.npy")
         np.save(out_path, los_mask)
 
 if __name__ == "__main__":
+    
+    
     process_all_inputs(
         input_dir="./inputs",
         csv_dir="./Positions",
         output_dir="./losmap"
     )
+
