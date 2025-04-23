@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 from dataset import RadioMapDataset
 from model import UNet
-from utils import RMSELoss, save_checkpoint, custom_collate_fn, plot_loss_curve  # ✅ 添加 plot_loss_curve
+from utils import RMSELoss, save_checkpoint, custom_collate_fn, plot_loss_curve 
 from pathlib import Path
 from tqdm import tqdm
 import os
@@ -26,6 +26,7 @@ inputs_dir = data_root / "inputs"
 outputs_dir = data_root / "outputs"
 sparse_dir = data_root / "sparse_samples_0.5"
 positions_dir = data_root / "Positions"
+los_dir = data_root / "losmap"
 
 batch_size = 4
 epochs = 50
@@ -44,7 +45,7 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collat
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
 
 # ==== Initialize model ====
-model = UNet(in_channels=5, out_channels=1).to(device)
+model = UNet(in_channels=4, out_channels=1).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 criterion = RMSELoss()
 
@@ -77,6 +78,7 @@ for epoch in range(1, epochs + 1):
     avg_train_loss = train_loss / len(train_loader)
     train_losses.append(avg_train_loss)  #
     print(f"Epoch {epoch}: Train RMSE = {avg_train_loss:.4f}")
+
     # Validation
     model.eval()
     val_loss = 0
@@ -99,5 +101,5 @@ for epoch in range(1, epochs + 1):
         save_checkpoint(model, "checkpoints/best_model.pth")
         print("Saved best model.")
 
-# ==== 绘制曲线 ====
-plot_loss_curve(train_losses, val_losses, "checkpoints/loss_curve.png")  # ✅ 绘图并保存
+# Visualize loss curves
+plot_loss_curve(train_losses, val_losses, "checkpoints/loss_curve.png")  

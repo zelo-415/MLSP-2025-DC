@@ -1,7 +1,7 @@
 # visualize_prediction.py
 import torch
 import matplotlib.pyplot as plt
-from dataset1 import RadioMapDataset
+from dataset import RadioMapDataset
 from model import UNet
 from utils import custom_collate_fn
 from pathlib import Path
