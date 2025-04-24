@@ -35,7 +35,7 @@ val_ratio = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ==== Load dataset ====
-full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir)
+full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir)
 val_size = int(len(full_dataset) * val_ratio)
 train_size = len(full_dataset) - val_size
 generator = torch.Generator().manual_seed(42)
@@ -45,7 +45,7 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collat
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
 
 # ==== Initialize model ====
-model = UNet(in_channels=4, out_channels=1).to(device)
+model = UNet(in_channels=5, out_channels=1).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 criterion = RMSELoss()
 

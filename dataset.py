@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import pandas as pd
 
 class RadioMapDataset(Dataset):
-    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir):
+    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir):
         self.inputs_dir = Path(inputs_dir)
         self.outputs_dir = Path(outputs_dir)
         self.sparse_dir = Path(sparse_dir)
@@ -47,7 +47,7 @@ class RadioMapDataset(Dataset):
         
         # Load lost samples if available
         if self.lost_dir:
-            los_fname = Path(fname).stem + ".npy"
+            los_fname = Path(fname).stem + "_los.npy"
             los_path = self.lost_dir / los_fname
             los_map = np.load(los_path)
             los_tensor = torch.from_numpy(los_map).unsqueeze(0) # [1, H, W]
