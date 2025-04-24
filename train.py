@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 from dataset import RadioMapDataset
 from model import UNet
+# from unet_seblock import UNetWithSE
 from utils import RMSELoss, save_checkpoint, custom_collate_fn, plot_loss_curve 
 from pathlib import Path
 from tqdm import tqdm
@@ -27,6 +28,7 @@ outputs_dir = data_root / "outputs"
 sparse_dir = data_root / "sparse_samples_0.5"
 positions_dir = data_root / "Positions"
 los_dir = data_root / "losmap"
+hit_dir = data_root / "hitmap"
 
 batch_size = 4
 epochs = 50
@@ -35,7 +37,7 @@ val_ratio = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ==== Load dataset ====
-full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir)
+full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = hit_dir)
 val_size = int(len(full_dataset) * val_ratio)
 train_size = len(full_dataset) - val_size
 generator = torch.Generator().manual_seed(42)
