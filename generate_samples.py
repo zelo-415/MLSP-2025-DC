@@ -29,4 +29,5 @@ def process_all_images(outputs_dir, output_dir_05, output_dir_002):
          np.save(output_002_dir / (img_file.stem + ".npy"), samples_002)
  
  # Example usage:
+process_all_images("outputs","sparse_samples_0.5", "sparse_samples_0.02")
 process_all_images("/home/tejas/Desktop/MLSP-2025-DC/competition/Outputs/Task_2_ICASSP","competition/sparse_samples_0.5", "competition/sparse_samples_0.02")

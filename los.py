@@ -1,65 +1,104 @@
-import cupy as cp
+import os
+import re
 import numpy as np
 import pandas as pd
-from pathlib import Path
 from PIL import Image
-from torchvision import transforms
+from pathlib import Path
 from tqdm import tqdm
+def natural_key(text):
+    """B1 → B2 → B10"""
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', text)]
 
-def _bresenhamline_nslope(slope):
-    scale = cp.amax(cp.abs(slope), axis=1).reshape(-1, 1)
-    zeroslope = (scale == 0).all(1)
-    scale[zeroslope] = cp.ones(1)
-    normalizedslope = cp.array(slope, dtype=cp.double) / scale
-    normalizedslope[zeroslope] = cp.zeros(slope[0].shape)
-    return normalizedslope
+def extract_scene_and_index(filename):
+    """
+    B1_Ant1_f1_S0.png → ('B1_Ant1_f1', 0)
+    """
+    name = Path(filename).stem
+    parts = name.split('_')
+    scene = '_'.join(parts[:-1])
+    index = int(parts[-1][1:])  # S0 → 0
+    return scene, index
 
-def _bresenhamlines(start, end, max_iter):
-    if max_iter == -1:
-        max_iter = cp.amax(cp.amax(cp.abs(end - start), axis=1))
-    npts, dim = start.shape
-    nslope = _bresenhamline_nslope(end - start)
-    steps = cp.arange(1, max_iter + 1)
-    stepmat = cp.tile(steps, (dim, 1)).T
-    bline = start[:, cp.newaxis, :] + nslope[:, cp.newaxis, :] * stepmat
-    return cp.rint(bline).astype(cp.int32)
 
-def generate_los_map(rgb_path, positions_dir, output_dir):
-    fname = rgb_path.stem
-    s_idx = int(fname.split("_")[-1][1:])
-    building, antenna, freq = fname.split("_")[:3]
-    pos_file = Path(positions_dir) / f"Positions_{building}_{antenna}_{freq}.csv"
-    df = pd.read_csv(pos_file)
-    tx_x = int(round(df.iloc[s_idx]['X']))
-    tx_y = int(round(df.iloc[s_idx]['Y']))
+def generate_wall_mask(png_path):
+    img = Image.open(png_path).convert('RGB')
+    img_np = np.array(img)
+    R, G = img_np[:, :, 0], img_np[:, :, 1]
+    return ((R != 0) | (G != 0)).astype(np.uint8)
 
-    rgb_tensor = transforms.ToTensor()(Image.open(rgb_path).convert("RGB"))
-    R, G = rgb_tensor[0].numpy(), rgb_tensor[1].numpy()
-    wall_mask = ((R != 0) | (G != 0)).astype(np.uint8)
+def bresenham_line(x0, y0, x1, y1):
+    points = []
+    dx, dy = abs(x1 - x0), abs(y1 - y0)
+    x, y = x0, y0
+    sx, sy = 1 if x1 >= x0 else -1, 1 if y1 >= y0 else -1
+    if dx >= dy:
+        err = dx // 2
+        while x != x1:
+            points.append((x, y))
+            err -= dy
+            if err < 0:
+                y += sy
+                err += dx
+            x += sx
+        points.append((x1, y1))
+    else:
+        err = dy // 2
+        while y != y1:
+            points.append((x, y))
+            err -= dx
+            if err < 0:
+                x += sx
+                err += dy
+            y += sy
+        points.append((x1, y1))
+    return points
+
+def generate_los_mask(wall_mask, tx_x, tx_y):
     H, W = wall_mask.shape
+    los_mask = np.zeros_like(wall_mask, dtype=np.uint8)
+    for x in range(H):
+        for y in range(W):
+            path = bresenham_line(tx_x, tx_y, x, y)
+            blocked = any(
+                0 <= px < H and 0 <= py < W and wall_mask[px, py] == 1
+                for (px, py) in path if (px, py) != (tx_x, tx_y)
+            )
+            los_mask[x, y] = 0 if blocked else 1
+    return los_mask
 
-    wall_cp = cp.asarray(wall_mask)
-    y, x = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
-    ground_points = cp.stack([x.ravel(), y.ravel()], axis=1)
+def process_all_inputs(input_dir, csv_dir, output_dir):
+    os.makedirs(output_dir, exist_ok=True)
 
-    tx = cp.array([[tx_x, tx_y]])
-    lines = _bresenhamlines(ground_points, tx.repeat(len(ground_points), axis=0), max_iter=-1)
-    flat_lines = lines.reshape(-1, 2)
-    hits = wall_cp[flat_lines[:, 1], flat_lines[:, 0]].reshape(lines.shape[0], lines.shape[1])
-    blocked = cp.any(hits == 1, axis=1)
-    los_map = (~blocked).reshape(H, W).astype(cp.uint8)
+    all_pngs = sorted(
+        (f for f in os.listdir(input_dir) if f.endswith(".png")),
+        key=natural_key
+    )
 
-    np.save(Path(output_dir) / f"{fname}.npy", cp.asnumpy(los_map))
+    for fname in tqdm(all_pngs, desc="Processing Images"):
+        scene_name, tx_index = extract_scene_and_index(fname)
+        png_path = os.path.join(input_dir, fname)
+        csv_path = os.path.join(csv_dir, f"Positions_{scene_name}.csv")
 
-def process_all_images(inputs_dir, positions_dir, output_dir):
-    inputs_dir = Path(inputs_dir)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True, parents=True)
-    for rgb_path in tqdm(sorted(inputs_dir.glob("*.png")), desc="Generating LOS (CuPy)"):
-        try:
-            generate_los_map(rgb_path, positions_dir, output_dir)
-        except Exception as e:
-            print(f"[ERROR] {rgb_path.name}: {e}")
+        pos_df = pd.read_csv(csv_path)
+        
+        tx_x, tx_y = int(pos_df.loc[tx_index, "X"])-1, int(pos_df.loc[tx_index, "Y"])-1
+        wall_mask = generate_wall_mask(png_path)
+
+        H, W = wall_mask.shape
+        if not (0 <= tx_x < H and 0 <= tx_y < W):
+            
+            continue
+
+        los_mask = generate_los_mask(wall_mask, tx_x, tx_y)
+        out_path = os.path.join(output_dir, f"{scene_name}_S{tx_index}_los.npy")
+        np.save(out_path, los_mask)
 
 if __name__ == "__main__":
-    process_all_images("inputs", "Positions", "los_map")
+    
+    
+    process_all_inputs(
+        input_dir="./inputs",
+        csv_dir="./Positions",
+        output_dir="./losmap"
+    )
+
