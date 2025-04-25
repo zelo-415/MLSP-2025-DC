@@ -23,7 +23,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     df = pd.read_csv(pos_path)
     tx_x, tx_y = int(df.loc[s_idx, "X"]), int(df.loc[s_idx, "Y"])
 
-    # 读取 RGB
+    #RGB
     rgb = Image.open(rgb_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(rgb)
     rgb_tensor[0] = 255 * rgb_tensor[0] / 20
@@ -39,6 +39,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     hitmap = np.clip(hitmap, 0, 15) / 16.0
     hit_tensor = torch.from_numpy(hitmap).unsqueeze(0).float()
     input_tensor = torch.cat([rgb_tensor, sparse_tensor], dim=0)
+    #padding
     _, h, w = input_tensor.shape
     pad_h = (32 - h % 32) % 32
     pad_w = (32 - w % 32) % 32
