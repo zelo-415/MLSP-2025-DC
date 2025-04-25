@@ -31,7 +31,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
 
     
-    sparse_tensor = load_sparse_png(sparse_path)/100
+    sparse_tensor = load_sparse_png(sparse_path)
 
     # hitmap 
     wall_mask = generate_wall_mask(rgb_path)
