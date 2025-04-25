@@ -21,9 +21,9 @@ def set_seed(seed=42):
 set_seed(42)
 
 # ==== Config ====
-data_root = Path("./")
-inputs_dir = data_root / "inputs"
-outputs_dir = data_root / "outputs"
+data_root = Path("./competition/")
+inputs_dir = data_root / "Inputs/Task_2_ICASSP"
+outputs_dir = data_root / "Outputs/Task_2_ICASSP"
 sparse_dir = data_root / "sparse_samples_0.5"
 positions_dir = data_root / "Positions"
 
@@ -44,7 +44,7 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collat
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
 
 # ==== Initialize model ====
-model = UNet(in_channels=5, out_channels=1).to(device)
+model = UNet(in_channels=4, out_channels=1).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 criterion = RMSELoss()
 

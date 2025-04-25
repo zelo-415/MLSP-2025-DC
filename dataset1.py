@@ -30,7 +30,7 @@ class RadioMapDataset(Dataset):
         rgb_tensor[0] = 255 * rgb_tensor[0] / 20
         rgb_tensor[1] = 255 * rgb_tensor[1] / 40
         rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
-
+        
         # Load GT PL map (grayscale)
         gt = Image.open(self.outputs_dir / fname).convert("L")
         gt_tensor = self.to_tensor(gt)

@@ -1,23 +1,29 @@
 # visualize_prediction.py
 import torch
 import matplotlib.pyplot as plt
-from dataset1 import RadioMapDataset
+from dataset import RadioMapDataset
 from model import UNet
 from utils import custom_collate_fn
 from pathlib import Path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+data_root = Path("./competition/")
+inputs_dir = data_root / "Inputs/Task_2_ICASSP"
+outputs_dir = data_root / "Outputs/Task_2_ICASSP"
+sparse_dir = data_root / "sparse_samples_0.5"
+positions_dir = data_root / "Positions"
+
 # === Load Dataset ===
 dataset = RadioMapDataset(
-    inputs_dir="inputs",
-    outputs_dir="outputs",
-    sparse_dir="sparse_samples_0.5",
-    positions_dir="Positions"
+    inputs_dir=inputs_dir,
+    outputs_dir=outputs_dir,
+    sparse_dir=sparse_dir,
+    positions_dir=positions_dir
 )
 
 # Choose index manually
-index = 50
+index = 700
 input_tensor, gt_tensor, mask_tensor = dataset[index]
 input_tensor = input_tensor.unsqueeze(0).to(device)  # [1, C, H, W]
 gt_tensor = gt_tensor.squeeze().cpu() * 255  # [H, W], dB
@@ -25,7 +31,7 @@ mask_tensor = mask_tensor.squeeze().cpu()
 
 # === Load Model ===
 model = UNet(in_channels=input_tensor.shape[1], out_channels=1).to(device)
-model.load_state_dict(torch.load("checkpoints/bestbestmodel.pth", map_location=device))
+model.load_state_dict(torch.load("checkpoints/best_model.pth", map_location=device))
 model.eval()
 
 # === Predict ===
@@ -38,21 +44,25 @@ error_map = (gt_tensor - pred).abs()
 # === Get RGB image ===
 import torchvision.transforms as transforms
 from PIL import Image
-rgb = Image.open(Path("inputs") / dataset.filenames[index]).convert("RGB")
+rgb = Image.open(inputs_dir/ dataset.filenames[index]).convert("RGB")
 rgb = transforms.ToTensor()(rgb)[0].numpy()  # R channel only
 
 # === Plot ===
-fig, axes = plt.subplots(1, 5, figsize=(20, 4))
+fig, axes = plt.subplots(1, 6, figsize=(20, 4))
 axes[0].imshow(rgb, cmap="gray")
 axes[0].set_title("Input RGB (R channel)")
-axes[1].imshow(gt_tensor, cmap="gray")
-axes[1].set_title("Ground Truth (GT) [dB]")
-axes[2].imshow(pred, cmap="gray")
-axes[2].set_title("Prediction [dB]")
-axes[3].imshow(mask_tensor, cmap="gray")
-axes[3].set_title("Sampling Mask")
-axes[4].imshow(error_map, cmap="hot")
-axes[4].set_title("Absolute Error [dB]")
+axes[1].imshow(input_tensor[0][0].cpu(), cmap="gray")
+axes[1].set_title("input rgb (polar)")
+axes[2].imshow(gt_tensor, cmap="gray")
+axes[2].set_title("Ground Truth (GT) [dB]")
+axes[3].imshow(pred, cmap="gray")
+axes[3].set_title("Prediction [dB]")
+axes[4].imshow(mask_tensor, cmap="gray")
+axes[4].set_title("Sampling Mask")
+axes[5].imshow(error_map, cmap="hot")
+axes[5].set_title("Absolute Error [dB]")
+
+
 
 for ax in axes:
     ax.axis("off")
