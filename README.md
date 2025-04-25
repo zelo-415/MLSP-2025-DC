@@ -1,4 +1,4 @@
-Unet with RGB, sampled points, TX heatmap as imput channels (5 channels)
+Unet with RGB, sampled points, hitmaps as imput channels (5 channels)
 ### Run training
 - Add the dataset (including inputs, outputs and Positions).
 - Run generate_samples.py to generate samples under different sparse sampling rate.
