@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader, random_split
 from dataset import RadioMapDataset
 from model import UNet
 # from unet_seblock import UNetWithSE
+# from unet_freq import UNet
 from utils import RMSELoss, save_checkpoint, custom_collate_fn, plot_loss_curve 
 from pathlib import Path
 from tqdm import tqdm
@@ -22,9 +23,9 @@ def set_seed(seed=42):
 set_seed(42)
 
 # ==== Config ====
-data_root = Path("./competition/")
-inputs_dir = data_root / "Inputs/Task_2_ICASSP"
-outputs_dir = data_root / "Outputs/Task_2_ICASSP"
+data_root = Path("./")
+inputs_dir = data_root / "inputs"
+outputs_dir = data_root / "outputs"
 sparse_dir = data_root / "sparse_samples_0.5"
 positions_dir = data_root / "Positions"
 los_dir = data_root / "losmap"
@@ -47,8 +48,10 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collat
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
 
 # ==== Initialize model ====
-model = UNet(in_channels=4, out_channels=1).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+model = UNet(in_channels=5, out_channels=1).to(device)
+# optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+# scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 criterion = RMSELoss()
 
 # ==== Training loop ====
@@ -66,6 +69,7 @@ for epoch in range(1, epochs + 1):
         inputs = inputs.to(device)
         targets = targets.to(device)
         masks = masks.to(device)
+        # freq = freq.to(device)
 
         preds = model(inputs)
         loss = criterion(preds, targets, masks)
@@ -73,6 +77,7 @@ for epoch in range(1, epochs + 1):
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        # scheduler.step()
 
         train_loss += loss.item()
         loop.set_postfix(train_loss=loss.item())
@@ -89,6 +94,7 @@ for epoch in range(1, epochs + 1):
             inputs = inputs.to(device)
             targets = targets.to(device)
             masks = masks.to(device)
+            # freq = freq.to(device)
 
             preds = model(inputs)
             loss = criterion(preds, targets, masks)
@@ -104,4 +110,5 @@ for epoch in range(1, epochs + 1):
         print("Saved best model.")
 
 # Visualize loss curves
-plot_loss_curve(train_losses, val_losses, "checkpoints/loss_curve.png")  
+plot_loss_curve(train_losses, val_losses, model_name=model.__class__.__name__)
+
