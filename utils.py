@@ -65,8 +65,7 @@ def find_FSPL(fname, d_map):
     freq_GHz = freqs_GHz[fnum-1]
     lam = 0.3 / freq_GHz
     fspl = (4 * math.pi * d_map) / lam
-    fspl = 20 * np.log10(fspl + 1e-6)
-    fspl = torch.tensor(fspl, dtype=torch.float32)
+    fspl = 20 * torch.log10(fspl + 1e-6)
     return fspl
 
 def convert_to_polar(tensor: torch.Tensor, center: tuple[int, int], num_radial=None, num_angles=None):
