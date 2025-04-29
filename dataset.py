@@ -35,11 +35,10 @@ class RadioMapDataset(Dataset):
         center = (W // 2, H // 2)
         rgb_tensor[0] = 255 * rgb_tensor[0] / 20
         rgb_tensor[1] = 255 * rgb_tensor[1] / 40
-        rgb_tensor[2] = 255 * rgb_tensor[2] 
+        rgb_tensor[2] = 255 * rgb_tensor[2] / 100
         rgb_tensor[2] = find_FSPL(fname, rgb_tensor[2]) # [H, W] -> [H, W] FSPL map
-        rgb_tensor[2] = rgb_tensor[2].unsqueeze(0) # [1, H, W] FSPL map
-        polar_T = convert_to_polar(rgb_tensor[1], center) # [1, H, W] -> [1, num_radial, num_angles]
-        polar_FSPL = convert_to_polar(rgb_tensor[2], center) # [1, H, W] -> [1, num_radial, num_angles]
+        polar_T = convert_to_polar(rgb_tensor[1].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
+        polar_FSPL = convert_to_polar(rgb_tensor[2].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
         T_cumsum_polar = torch.cumsum(polar_T[0], dim=0)    
         modified_polar_fspl = polar_FSPL[0] + T_cumsum_polar    
         modified_fspl_map = convert_to_cartesian(modified_polar_fspl.unsqueeze(0), center, (H, W))
