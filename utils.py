@@ -51,7 +51,25 @@ def custom_collate_fn(batch):
      inputs, gts, masks = zip(*padded_batch)
      return torch.stack(inputs), torch.stack(gts), torch.stack(masks)
 
-def _convert_to_polar(tensor: torch.Tensor, center: tuple[int, int], num_radial=None, num_angles=None):
+def find_FSPL(fname, d_map):
+    """
+    Args:
+        fname (str): filename containing _f1, _f2, _f3 to identify frequency
+        d_map (torch.Tensor): (H, W) tensor, real distance in meters
+    Returns:
+        fspl_map (torch.Tensor): (H, W) tensor, FSPL in dB
+    """
+    freqs_GHz = [0.868, 1.8, 3.5]
+    match = re.search(r'_f(\d+)', fname)
+    fnum = int(match.group(1))
+    freq_GHz = freqs_GHz[fnum-1]
+    lam = 0.3 / freq_GHz
+    fspl = (4 * math.pi * d_map) / lam
+    fspl = 20 * np.log10(fspl + 1e-6)
+    fspl = torch.tensor(fspl, dtype=torch.float32)
+    return fspl
+
+def convert_to_polar(tensor: torch.Tensor, center: tuple[int, int], num_radial=None, num_angles=None):
      """
      Converts a (C, H, W) tensor to polar coordinates per channel.
 
@@ -99,14 +117,52 @@ def _convert_to_polar(tensor: torch.Tensor, center: tuple[int, int], num_radial=
 
      return polar_tensor.squeeze(0).permute(0, 2, 1)
 
-def find_FSPL(fname, X):
-     X = X.numpy()
-     freqs_GHz = [0.868, 1.8, 3.5]
-     match = re.search(r'_f(\d+)', fname)
-     fnum = int(match.group(1))
-     freq_GHz = freqs_GHz[fnum-1]
-     lam = 0.3 / freq_GHz
-     fspl =  ( (4 * math.pi * X[:, :, 2]) + 1e-6 / lam )
-     fspl = 20 * np.log10 ( fspl )
-     fspl = torch.tensor(fspl, dtype = torch.float32)
-     return fspl
+def convert_to_cartesian(polar_tensor: torch.Tensor, center: tuple[int, int], original_size: tuple[int, int]):
+    """
+    Converts a (C, num_radial, num_angles) polar tensor back to cartesian (C, H, W).
+    """
+    C, num_radial, num_angles = polar_tensor.shape
+    H, W = original_size
+    cx, cy = center
+
+    # Step 1: Create (x, y) grid
+    grid_y, grid_x = torch.meshgrid(
+        torch.linspace(0, H - 1, H, device=polar_tensor.device),
+        torch.linspace(0, W - 1, W, device=polar_tensor.device),
+        indexing='ij'
+    )
+
+    # Step 2: Shift to center
+    x_shifted = grid_x - cx
+    y_shifted = grid_y - cy
+
+    # Step 3: (x, y) -> (r, theta)
+    r = torch.sqrt(x_shifted ** 2 + y_shifted ** 2)
+    theta = torch.atan2(y_shifted, x_shifted)  # no flip!
+
+    # Step 4: Normalize (r, theta) to [0, 1]
+    max_x = max(cx, W - cx)
+    max_y = max(cy, H - cy)
+    max_r = (max_x**2 + max_y**2) ** 0.5
+
+    r_norm = r / max_r
+    theta_norm = (theta + torch.pi) / (2 * torch.pi)
+
+    # Step 5: Map (r_norm, theta_norm) to polar tensor index
+    r_idx = r_norm * (num_radial - 1)
+    theta_idx = theta_norm * (num_angles - 1)
+
+    # Step 6: Normalize index to [-1, 1] for grid_sample
+    r_grid = 2 * r_idx / (num_radial - 1) - 1
+    theta_grid = 2 * theta_idx / (num_angles - 1) - 1
+
+    grid = torch.stack((r_grid, theta_grid), dim=-1) 
+
+    grid = grid.unsqueeze(0)  # batch dim
+    polar_tensor = polar_tensor.unsqueeze(0)
+
+    # Step 7: Sample
+    cartesian_tensor = F.grid_sample(polar_tensor, grid, mode='bilinear', align_corners=True)
+    cartesian_tensor = torch.flip(cartesian_tensor, dims=[2,3]) 
+
+    return cartesian_tensor.squeeze(0)
