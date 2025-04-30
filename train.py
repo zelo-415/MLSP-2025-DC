@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
-from dataset import RadioMapDataset
+from dataset1 import RadioMapDataset
 from model import UNet
 from utils import MSELoss, compute_rmse, save_checkpoint, custom_collate_fn, plot_loss_curve
 from pathlib import Path
@@ -80,7 +80,7 @@ for epoch in range(1, epochs + 1):
         train_squared_error_sum += batch_error.sum().item()
         train_pixel_count += (1 - masks).sum().item()
 
-        loop.set_postfix(train_rmse=mse_loss.item()**0.5)
+        loop.set_postfix(train_rmse=(mse_loss.item())**0.5)
 
     
     avg_train_rmse = (train_squared_error_sum / train_pixel_count) ** 0.5
