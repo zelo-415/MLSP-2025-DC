@@ -7,13 +7,21 @@ import re
 import os
 import math
  
-def RMSELoss():
-     def masked_rmse(pred, target, mask):
+def MSELoss():
+     def masked_mse(pred, target, mask):
          diff = ((pred - target)*255) ** 2
          masked_diff = diff * (1 - mask)  # Only penalize on non-sampled locations
          mse = masked_diff.sum() / (1 - mask).sum().clamp(min=1.0)
-         return torch.sqrt(mse)
-     return masked_rmse
+         return mse
+     return masked_mse
+
+@torch.no_grad()
+def compute_rmse(pred, target, mask):
+    diff = ((pred - target) * 255) ** 2
+    masked_diff = diff * (1 - mask)
+    mse_val = masked_diff.sum() / (1 - mask).sum().clamp(min=1.0)
+    rmse_val = torch.sqrt(mse_val)
+    return rmse_val
  
 def save_checkpoint(model, path):
      os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -65,7 +73,14 @@ def find_FSPL(fname, d_map):
     freq_GHz = freqs_GHz[fnum-1]
     lam = 0.3 / freq_GHz
     fspl = (4 * math.pi * d_map) / lam
-    fspl = 20 * torch.log10(fspl + 1e-6)
+    fspl = 20 * torch.log10(fspl + 1)
+    return fspl
+
+def test_FSPL(d_map):
+    freq_GHz = 0.868
+    lam = 0.3 / freq_GHz
+    fspl = (4 * math.pi * d_map) / lam
+    fspl = 20 * torch.log10(fspl + 1)
     return fspl
 
 def convert_to_polar(tensor: torch.Tensor, center: tuple[int, int], num_radial=None, num_angles=None):
