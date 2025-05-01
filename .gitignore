@@ -1,4 +1,18 @@
-checkpoints
-competition
+__pycache__/
+Building_Details/
+checkpoints/
+hitmap/
+inputs/
+losmap/
+outputs/
+Positions/
+Radiation_Patterns/
+
+# === Ignore large/binary files ===
 *.zip
-losmap
+*.pyc
+*.log
+
+# (Optional) If sparse sample files are not needed
+sparse_samples_0.02/
+sparse_samples_0.5/
