@@ -45,8 +45,6 @@ train_set, val_set = random_split(full_dataset, [train_size, val_size], generato
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_fn)
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
 
-example_input, example_target, example_mask, tx = next(iter(train_loader))
-B, C, H, W = example_input.shape
 # ==== Initialize model ====
 model = UNet(in_channels=5, out_channels=1).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -65,13 +63,10 @@ for epoch in range(1, epochs + 1):
     train_pixel_count = 0
 
     loop = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}")
-    for inputs, targets, masks, txs in loop:
-        txs = txs.to(device)
+    for inputs, targets, masks in loop:
         inputs = inputs.to(device)
         targets = targets.to(device)
         masks = masks.to(device)
-        tx_x, tx_y = txs[:, 0], txs[:, 1]
-        tx_x, tx_y = tx_x.to(device), tx_y.to(device)
 
         preds = model(inputs)
         mse_loss = criterion(preds, targets, masks)

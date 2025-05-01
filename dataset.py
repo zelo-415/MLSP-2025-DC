@@ -11,14 +11,13 @@ import pandas as pd
 from utils import convert_to_polar, convert_to_cartesian, find_FSPL
  
 class RadioMapDataset(Dataset):
-    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None, use_pl=False):
+    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None):
         self.inputs_dir = Path(inputs_dir)
         self.outputs_dir = Path(outputs_dir)
         self.sparse_dir = Path(sparse_dir)
         self.positions_dir = Path(positions_dir)
         self.los_dir = Path(los_dir) if los_dir else None
         self.hit_dir = Path(hit_dir) if hit_dir else None
-        self.use_pl = use_pl
 
         self.filenames = sorted([f.name for f in self.inputs_dir.glob("*.png")])
         self.to_tensor = transforms.ToTensor()
@@ -83,20 +82,9 @@ class RadioMapDataset(Dataset):
 
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
-        if self.hit_dir:
-          input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
-        H, W = input_tensor.shape[1:]
-        input_tensor_polar = _convert_to_polar(input_tensor.unsqueeze(0), (tx_x, tx_y), num_radial=H, num_angles=W)
-        
-        #input_tensor = torch.cat([input_tensor, input_tensor_polar], dim=0)
-        #input_tensor = torch.cat([input_tensor, input_tensor_polar], dim=0)
-        input_tensor = input_tensor_polar
-        input_tensor = _convert_to_cartesian(input_tensor, (tx_x, tx_y), (H, W))
-        gt_tensor = _convert_to_polar(gt_tensor.unsqueeze(0), (tx_x, tx_y), num_radial=H, num_angles=W)
-        #gt_tensor = _convert_to_cartesian(gt_tensor, (tx_x, tx_y), (H, W))
-        #mask_map = _convert_to_polar(mask_map, (tx_x, tx_y), num_radial=H, num_angles=W)  
+        input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 
-        return input_tensor, gt_tensor, mask_map, (tx_x, tx_y)
+        return input_tensor, gt_tensor, mask_map
 
     def pad_all(self, input_tensor, hit_tensor, gt_tensor, mask_tensor):
         _, h, w = input_tensor.shape
@@ -126,5 +114,3 @@ class RadioMapDataset(Dataset):
         if row_index >= len(df):
             raise IndexError(f"Tx index {row_index} out of range in {filepath}")
         return float(df.iloc[row_index]['X']), float(df.iloc[row_index]['Y'])
-
-
