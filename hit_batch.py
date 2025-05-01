@@ -78,4 +78,4 @@ def process_all(inputs_dir, positions_dir, output_dir):
 
 if __name__ == "__main__":
     cp.cuda.Device(3).use() 
-    process_all("inputs", "Positions", "hitmap")
+    process_all("competition/Inputs/Task_1_ICASSP", "competition/Positions", "competition/hitmap")

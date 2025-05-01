@@ -8,16 +8,17 @@ import os
 import torch.nn.functional as F
 import pandas as pd
 
-from utils import _convert_to_polar, find_FSPL
+from utils import _convert_to_polar, find_FSPL, _convert_to_cartesian
  
 class RadioMapDataset(Dataset):
-    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None):
+    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None, use_pl=False):
         self.inputs_dir = Path(inputs_dir)
         self.outputs_dir = Path(outputs_dir)
         self.sparse_dir = Path(sparse_dir)
         self.positions_dir = Path(positions_dir)
         self.los_dir = Path(los_dir) if los_dir else None
         self.hit_dir = Path(hit_dir) if hit_dir else None
+        self.use_pl = use_pl
 
         self.filenames = sorted([f.name for f in self.inputs_dir.glob("*.png")])
         self.to_tensor = transforms.ToTensor()
@@ -33,8 +34,15 @@ class RadioMapDataset(Dataset):
         rgb_tensor = self.to_tensor(rgb)  # [3, H, W]
         rgb_tensor[0] = 255 * rgb_tensor[0] / 20
         rgb_tensor[1] = 255 * rgb_tensor[1] / 40
-        rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
 
+        dists = rgb_tensor[2]*100
+
+        #print(dists.max())
+        fspl = find_FSPL(fname, dists) / 100
+
+        #print(fspl.max())
+        #before: rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
+        rgb_tensor[2] = fspl
         # Load GT PL map (grayscale)
         gt = Image.open(self.outputs_dir / fname).convert("L")
         gt_tensor = self.to_tensor(gt)
@@ -71,17 +79,27 @@ class RadioMapDataset(Dataset):
         else:
             hit_tensor = torch.zeros((1, h, w)).float()
 
-
         # Load Tx position and create Gaussian heatmap
-        # pos_file, tx_idx = self._find_position_file(fname)
-        # tx_x, tx_y = self._load_tx_xy(pos_file, tx_idx)
+        pos_file, tx_idx = self._find_position_file(fname)
+        tx_x, tx_y = self._load_tx_xy(pos_file, tx_idx)
         # heatmap = self._generate_gaussian_heatmap(tx_x, tx_y, h, w, sigma=25.0).unsqueeze(0)
 
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
-        input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
+        if self.hit_dir:
+          input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
+        H, W = input_tensor.shape[1:]
+        input_tensor_polar = _convert_to_polar(input_tensor.unsqueeze(0), (tx_x, tx_y), num_radial=H, num_angles=W)
+        
+        #input_tensor = torch.cat([input_tensor, input_tensor_polar], dim=0)
+        #input_tensor = torch.cat([input_tensor, input_tensor_polar], dim=0)
+        input_tensor = input_tensor_polar
+        input_tensor = _convert_to_cartesian(input_tensor, (tx_x, tx_y), (H, W))
+        gt_tensor = _convert_to_polar(gt_tensor.unsqueeze(0), (tx_x, tx_y), num_radial=H, num_angles=W)
+        #gt_tensor = _convert_to_cartesian(gt_tensor, (tx_x, tx_y), (H, W))
+        #mask_map = _convert_to_polar(mask_map, (tx_x, tx_y), num_radial=H, num_angles=W)  
 
-        return input_tensor, gt_tensor, mask_map
+        return input_tensor, gt_tensor, mask_map, (tx_x, tx_y)
 
     def pad_all(self, input_tensor, hit_tensor, gt_tensor, mask_tensor):
         _, h, w = input_tensor.shape

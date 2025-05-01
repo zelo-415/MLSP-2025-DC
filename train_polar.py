@@ -74,6 +74,18 @@ for epoch in range(1, epochs + 1):
 
         preds = model(inputs)
 
+        # Replace the in-place modification with a new tensor
+        new_preds = []
+        for i in range(len(preds)):
+            pred = preds[i]
+            tx_x_i, tx_y_i = tx_x[i], tx_y[i]
+            H, W = pred.shape[1:]
+            pred = _convert_to_cartesian(pred, (tx_x_i, tx_y_i), (H, W), device=device)
+            new_preds.append(pred)
+
+        # Stack the new predictions into a tensor
+        preds = torch.stack(new_preds)
+
         loss = criterion(preds, targets, masks)
 
         optimizer.zero_grad()
@@ -100,6 +112,18 @@ for epoch in range(1, epochs + 1):
             masks = masks.to(device)
 
             preds = model(inputs)
+
+            # Replace the in-place modification with a new tensor
+            new_preds = []
+            for i in range(len(preds)):
+                pred = preds[i]
+                tx_x_i, tx_y_i = tx_x[i], tx_y[i]
+                H, W = pred.shape[1:]
+                pred = _convert_to_cartesian(pred, (tx_x_i, tx_y_i), (H, W), device=device)
+                new_preds.append(pred)
+
+            # Stack the new predictions into a tensor
+            preds = torch.stack(new_preds)
             
             loss = criterion(preds, targets, masks)
             val_loss += loss.item()
@@ -115,4 +139,3 @@ for epoch in range(1, epochs + 1):
 
 # Visualize loss curves
 plot_loss_curve(train_losses, val_losses, "checkpoints/loss_curve.png")
-
