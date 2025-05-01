@@ -8,7 +8,7 @@ import os
 import torch.nn.functional as F
 import pandas as pd
 
-from utils import _convert_to_polar, find_FSPL, _convert_to_cartesian
+from utils import convert_to_polar, convert_to_cartesian, find_FSPL
  
 class RadioMapDataset(Dataset):
     def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None, use_pl=False):
@@ -32,17 +32,19 @@ class RadioMapDataset(Dataset):
         # Load RGB (3-channel physical input)
         rgb = Image.open(self.inputs_dir / fname).convert("RGB")
         rgb_tensor = self.to_tensor(rgb)  # [3, H, W]
+        C, H, W = rgb_tensor.shape
+        center = (W // 2, H // 2)
         rgb_tensor[0] = 255 * rgb_tensor[0] / 20
         rgb_tensor[1] = 255 * rgb_tensor[1] / 40
-
-        dists = rgb_tensor[2]*100
-
-        #print(dists.max())
-        fspl = find_FSPL(fname, dists) / 100
-
-        #print(fspl.max())
-        #before: rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
-        rgb_tensor[2] = fspl
+        rgb_tensor[2] = 255 * rgb_tensor[2] / 100
+        rgb_tensor[2] = find_FSPL(fname, rgb_tensor[2]) # [H, W] -> [H, W] FSPL map
+        polar_T = convert_to_polar(rgb_tensor[1].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
+        polar_FSPL = convert_to_polar(rgb_tensor[2].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
+        T_cumsum_polar = torch.cumsum(polar_T[0], dim=0)    
+        modified_polar_fspl = polar_FSPL[0] + T_cumsum_polar    
+        modified_fspl_map = convert_to_cartesian(modified_polar_fspl.unsqueeze(0), center, (H, W))
+        rgb_tensor[2] = modified_fspl_map.squeeze(0)
+        
         # Load GT PL map (grayscale)
         gt = Image.open(self.outputs_dir / fname).convert("L")
         gt_tensor = self.to_tensor(gt)
@@ -78,11 +80,6 @@ class RadioMapDataset(Dataset):
             hit_tensor = torch.from_numpy(hit_map).unsqueeze(0).float()  # [1, H, W]
         else:
             hit_tensor = torch.zeros((1, h, w)).float()
-
-        # Load Tx position and create Gaussian heatmap
-        pos_file, tx_idx = self._find_position_file(fname)
-        tx_x, tx_y = self._load_tx_xy(pos_file, tx_idx)
-        # heatmap = self._generate_gaussian_heatmap(tx_x, tx_y, h, w, sigma=25.0).unsqueeze(0)
 
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)

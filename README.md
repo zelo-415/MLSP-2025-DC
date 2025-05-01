@@ -7,4 +7,4 @@ Unet with RGB, sampled points, hitmaps as imput channels (5 channels)
 - Modify dataset.py and train.py to accomodate your feature selection.
 - Run train.py to start training.
 
-*Note: Input channel number.*
+*Note: Remember to adjust input channel number.*
