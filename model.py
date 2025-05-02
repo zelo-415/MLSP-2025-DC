@@ -17,16 +17,16 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 
 class UNet(nn.Module):
-    def __init__(self, in_channels=6, out_channels=1):
+    def __init__(self, in_channels=5, out_channels=1):
         super().__init__()
         self.enc1 = DoubleConv(in_channels, 64)
-        self.pool1 = nn.MaxPool2d(2)
+        self.pool1 = nn.AvgPool2d(2)
         self.enc2 = DoubleConv(64, 128)
-        self.pool2 = nn.MaxPool2d(2)
+        self.pool2 = nn.AvgPool2d(2)
         self.enc3 = DoubleConv(128, 256)
-        self.pool3 = nn.MaxPool2d(2)
+        self.pool3 = nn.AvgPool2d(2)
         self.enc4 = DoubleConv(256, 512)
-        self.pool4 = nn.MaxPool2d(2)
+        self.pool4 = nn.AvgPool2d(2)
 
         self.bottleneck = DoubleConv(512, 1024, dropout_p=0.2)
 
