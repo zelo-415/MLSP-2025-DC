@@ -53,7 +53,7 @@ def custom_collate_fn(batch):
  
          input_p = F.pad(input_tensor, (0, pad_w, 0, pad_h), value=0)
          gt_p = F.pad(gt_tensor, (0, pad_w, 0, pad_h), value=0)
-         mask_p = F.pad(mask_tensor, (0, pad_w, 0, pad_h), value=0)
+         mask_p = F.pad(mask_tensor, (0, pad_w, 0, pad_h), value=1)
  
          padded_batch.append((input_p, gt_p, mask_p))
  
