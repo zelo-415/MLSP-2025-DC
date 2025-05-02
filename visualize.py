@@ -3,14 +3,14 @@ import torch
 import matplotlib.pyplot as plt
 from dataset import RadioMapDataset
 from model import UNet
-from utils import custom_collate_fn, _convert_to_cartesian
+from utils import custom_collate_fn
 from pathlib import Path
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 pred_in_polar = True
-data_root = Path("./competition/")
-inputs_dir = data_root / "Inputs/Task_2_ICASSP"
-outputs_dir = data_root / "Outputs/Task_2_ICASSP"
+data_root = Path("./")
+inputs_dir = data_root / "inputs"
+outputs_dir = data_root / "outputs"
 sparse_dir = data_root / "sparse_samples_0.5"
 positions_dir = data_root / "Positions"
 
@@ -24,7 +24,7 @@ dataset = RadioMapDataset(
 
 # Choose index manually
 index = 721
-input_tensor, gt_tensor, mask_tensor, (tx_x, tx_y) = dataset[index]
+input_tensor, gt_tensor, mask_tensor = dataset[index]
 input_tensor = input_tensor.to(device)  # [1, C, H, W]
 gt_tensor = gt_tensor.squeeze().cpu() * 255  # [H, W], dB
 mask_tensor = mask_tensor.squeeze().cpu()
@@ -37,15 +37,7 @@ model.eval()
 # === Predict ===
 with torch.no_grad():
     pred = model(input_tensor).squeeze().cpu() * 255  # [H, W], dB
-    if pred_in_polar:
-        pred = pred.unsqueeze(0)
-        tx_x_i, tx_y_i = tx_x, tx_y
-        print(f"tx_x_i: {tx_x_i}, tx_y_i: {tx_y_i}")
-        H, W = pred.shape[1:]
-        print(f"pred shape: {pred.shape}")
-        pred = _convert_to_cartesian(pred.unsqueeze(0), (tx_x_i, tx_y_i), (H, W), device=None)
-        pred = pred.squeeze().cpu()  # [H, W], dB
-# === Compute error map ===
+        
 error_map = (gt_tensor - pred).abs()
 
 # === Get RGB image ===

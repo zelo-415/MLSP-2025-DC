@@ -37,12 +37,6 @@ class RadioMapDataset(Dataset):
         rgb_tensor[1] = 255 * rgb_tensor[1] / 40
         rgb_tensor[2] = 255 * rgb_tensor[2] / 100
         rgb_tensor[2] = find_FSPL(fname, rgb_tensor[2]) # [H, W] -> [H, W] FSPL map
-        polar_T = convert_to_polar(rgb_tensor[1].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
-        polar_FSPL = convert_to_polar(rgb_tensor[2].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
-        T_cumsum_polar = torch.cumsum(polar_T[0], dim=0)    
-        modified_polar_fspl = polar_FSPL[0] + T_cumsum_polar    
-        modified_fspl_map = convert_to_cartesian(modified_polar_fspl.unsqueeze(0), center, (H, W))
-        rgb_tensor[2] = modified_fspl_map.squeeze(0)
         
         # Load GT PL map (grayscale)
         gt = Image.open(self.outputs_dir / fname).convert("L")
@@ -80,7 +74,13 @@ class RadioMapDataset(Dataset):
         else:
             hit_tensor = torch.zeros((1, h, w)).float()
 
+        hit_tensor = hit_tensor+1
+        #rgb_tensor[2] *= hit_tensor.squeeze()  
+        hit_tensor = hit_tensor.squeeze() * rgb_tensor[2]
+        hit_tensor = hit_tensor.unsqueeze(0)  # [1, H, W]
+
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
+        input_tensor = rgb_tensor
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
         input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 

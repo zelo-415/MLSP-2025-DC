@@ -7,11 +7,13 @@ losmap/
 outputs/
 Positions/
 Radiation_Patterns/
+other_data/
 
 # === Ignore large/binary files ===
 *.zip
 *.pyc
 *.log
+*.png
 
 # (Optional) If sparse sample files are not needed
 sparse_samples_0.02/

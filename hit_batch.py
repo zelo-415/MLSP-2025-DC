@@ -25,11 +25,11 @@ def generate_wall_mask(png_path):
     img = Image.open(png_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(img)
     R, G = rgb_tensor[0].numpy(), rgb_tensor[1].numpy()
-    return ((R != 0) | (G != 0)).astype(np.uint8)
+    return R.astype(np.float32)
 
 def generate_hit_map(wall_mask, tx_x, tx_y):
     H, W = wall_mask.shape
-    wall_gpu = cp.asarray(wall_mask, dtype=cp.uint8)
+    wall_gpu = cp.asarray(wall_mask, dtype=cp.float32)
 
     y, x = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
     all_points = cp.stack((y.ravel(), x.ravel()), axis=1).astype(cp.int32)
@@ -44,14 +44,13 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
         (flat_lines[:, 0] >= 0) & (flat_lines[:, 0] < H) &
         (flat_lines[:, 1] >= 0) & (flat_lines[:, 1] < W)
     )
-    wall_values = cp.zeros(flat_lines.shape[0], dtype=cp.uint8)
+    wall_values = cp.zeros(flat_lines.shape[0], dtype=cp.float32)
     valid_lines = flat_lines[valid_mask]
     wall_values[valid_mask] = wall_gpu[valid_lines[:, 0], valid_lines[:, 1]]
     wall_values = wall_values.reshape(lines.shape[0], lines.shape[1])
-
-    diff = cp.diff(wall_values, axis=1)
-    hits = cp.sum(diff == 1, axis=1)
-
+    
+    hits = cp.sum(wall_values, axis=1)
+    print(hits)
     return cp.asnumpy(hits.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):
@@ -77,5 +76,5 @@ def process_all(inputs_dir, positions_dir, output_dir):
             print(f"[ERROR] {img_path.name}: {e}")
 
 if __name__ == "__main__":
-    cp.cuda.Device(3).use() 
-    process_all("competition/Inputs/Task_1_ICASSP", "competition/Positions", "competition/hitmap")
+    cp.cuda.Device(0).use() 
+    process_all("inputs", "Positions", "hitmap")
