@@ -25,7 +25,7 @@ def generate_wall_mask(png_path):
     img = Image.open(png_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(img)
     R, G = rgb_tensor[0].numpy(), rgb_tensor[1].numpy()
-    return R.astype(np.float32)
+    return G.astype(np.float32)
 
 def generate_hit_map(wall_mask, tx_x, tx_y):
     H, W = wall_mask.shape
@@ -50,7 +50,7 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     wall_values = wall_values.reshape(lines.shape[0], lines.shape[1])
     
     hits = cp.sum(wall_values, axis=1)
-    print(hits)
+    #print(hits)
     return cp.asnumpy(hits.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):
