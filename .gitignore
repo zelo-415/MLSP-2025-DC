@@ -1,2 +1,11 @@
 checkpoints
 competition
+inputs
+outputs
+Positions
+sparse_samples_0.02
+sparse_samples_0.5
+Kaggle
+losmap
+hitmap
+accumulated_T
