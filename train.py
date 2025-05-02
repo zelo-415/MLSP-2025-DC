@@ -100,7 +100,7 @@ for epoch in range(1, epochs + 1):
             preds = model(inputs)
             rmse_batch = compute_rmse(preds, targets, masks)
 
-            mse_batch = rmse_batch.item()
+            mse_batch = rmse_batch.item() ** 2
             num_valid_pixels = (1 - masks).sum().item()
             val_squared_error_sum += mse_batch * num_valid_pixels
             val_pixel_count += num_valid_pixels
