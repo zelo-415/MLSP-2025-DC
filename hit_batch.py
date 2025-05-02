@@ -43,7 +43,7 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     H, W = wall_mask.shape
     wall_gpu = cp.asarray(wall_mask, dtype=cp.uint8)
 
-    y, x = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
+    x, y = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
     all_points = cp.stack((y.ravel(), x.ravel()), axis=1).astype(cp.int32)
 
     # Ensure tx_x, tx_y are plain Python ints
@@ -79,8 +79,8 @@ def process_all(inputs_dir, positions_dir, output_dir):
             scene, s_idx = '_'.join(fname.split('_')[:-1]), int(fname.split('_')[-1][1:])
             pos_path = Path(positions_dir) / f"Positions_{scene}.csv"
             df = pd.read_csv(pos_path)
-            tx_x = int(df.loc[s_idx, "Y"].item())
-            tx_y = int(df.loc[s_idx, "X"].item())
+            tx_x = int(df.loc[s_idx, "X"].item())
+            tx_y = int(df.loc[s_idx, "Y"].item())
 
             wall_mask = generate_wall_mask(img_path)
             hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
