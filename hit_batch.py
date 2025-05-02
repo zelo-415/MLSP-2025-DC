@@ -6,20 +6,32 @@ from torchvision import transforms
 import pandas as pd
 from tqdm import tqdm
 
-def _bresenhamline_nslope(slope):
-    scale = cp.amax(cp.abs(slope), axis=1).reshape(-1, 1)
-    zeroslope = (scale == 0).all(1)
-    scale[zeroslope] = 1
-    normalizedslope = slope / scale
-    normalizedslope[zeroslope] = 0
-    return normalizedslope
+def _bresenhamlines_integer(start, end):
+    """
+    Vectorized integer Bresenham line generator using CuPy.
+    Args:
+        start: (N, 2) tensor, each row is (y1, x1)
+        end: (N, 2) tensor, each row is (y2, x2)
+    Returns:
+        lines: (N, L, 2) tensor of integer coordinates
+    """
+    N = start.shape[0]
+    dy = end[:, 0] - start[:, 0]
+    dx = end[:, 1] - start[:, 1]
 
-def _bresenhamlines(start, end):
-    max_iter = cp.amax(cp.abs(end - start), axis=1).astype(cp.int32).max()
-    steps = cp.arange(1, max_iter + 1, dtype=cp.int32).reshape(-1, 1)
-    nslope = _bresenhamline_nslope(end - start)
-    bline = start[:, None, :] + nslope[:, None, :] * steps
-    return cp.rint(bline).astype(cp.int32)
+    steps = cp.maximum(cp.abs(dy), cp.abs(dx)) + 1  # shape (N,)
+    max_len = int(cp.max(steps).item())  # convert to Python int to avoid ndarray error
+
+    t = cp.arange(max_len, dtype=cp.int32).reshape(1, -1)  # (1, max_len)
+    t = cp.broadcast_to(t, (N, max_len))
+
+    ratio = cp.clip(t / (steps[:, None] - 1 + 1e-6), 0, 1)  # avoid division by zero
+
+    y = cp.rint(start[:, 0:1] + ratio * dy[:, None]).astype(cp.int32)
+    x = cp.rint(start[:, 1:2] + ratio * dx[:, None]).astype(cp.int32)
+
+    lines = cp.stack((y, x), axis=-1)  # (N, max_len, 2)
+    return lines
 
 def generate_wall_mask(png_path):
     img = Image.open(png_path).convert("RGB")
@@ -34,24 +46,25 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     y, x = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
     all_points = cp.stack((y.ravel(), x.ravel()), axis=1).astype(cp.int32)
 
-    tx = cp.array([[tx_x, tx_y]], dtype=cp.int32)
+    # Ensure tx_x, tx_y are plain Python ints
+    tx_x = int(tx_x)
+    tx_y = int(tx_y)
+    tx = cp.array([[tx_y, tx_x]], dtype=cp.int32) 
     tx_batch = cp.repeat(tx, all_points.shape[0], axis=0)
 
-    lines = _bresenhamlines(all_points, tx_batch)
-    flat_lines = lines.reshape(-1, 2)
+    lines = _bresenhamlines_integer(all_points, tx_batch)  # (N, L, 2)
+    N, L = lines.shape[:2]
 
-    valid_mask = (
-        (flat_lines[:, 0] >= 0) & (flat_lines[:, 0] < H) &
-        (flat_lines[:, 1] >= 0) & (flat_lines[:, 1] < W)
-    )
-    wall_values = cp.zeros(flat_lines.shape[0], dtype=cp.uint8)
-    valid_lines = flat_lines[valid_mask]
-    wall_values[valid_mask] = wall_gpu[valid_lines[:, 0], valid_lines[:, 1]]
-    wall_values = wall_values.reshape(lines.shape[0], lines.shape[1])
+    ys, xs = lines[..., 0], lines[..., 1]
+    valid = (ys >= 0) & (ys < H) & (xs >= 0) & (xs < W)
+    flat_idx = ys * W + xs
+    flat_idx[~valid] = 0  # out-of-bound locations set to 0 index
 
-    diff = cp.diff(wall_values, axis=1)
-    hits = cp.sum(diff == 1, axis=1)
+    flat_vals = wall_gpu.ravel()[flat_idx]
+    flat_vals[~valid] = 0
+    flat_vals = flat_vals.reshape(N, L)
 
+    hits = cp.sum(flat_vals[:, 1:] == 1, axis=1)  # exclude TX point
     return cp.asnumpy(hits.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):
@@ -66,8 +79,8 @@ def process_all(inputs_dir, positions_dir, output_dir):
             scene, s_idx = '_'.join(fname.split('_')[:-1]), int(fname.split('_')[-1][1:])
             pos_path = Path(positions_dir) / f"Positions_{scene}.csv"
             df = pd.read_csv(pos_path)
-            tx_x = int(df.loc[s_idx, "X"]) 
-            tx_y = int(df.loc[s_idx, "Y"]) 
+            tx_x = int(df.loc[s_idx, "Y"].item())
+            tx_y = int(df.loc[s_idx, "X"].item())
 
             wall_mask = generate_wall_mask(img_path)
             hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
@@ -77,5 +90,5 @@ def process_all(inputs_dir, positions_dir, output_dir):
             print(f"[ERROR] {img_path.name}: {e}")
 
 if __name__ == "__main__":
-    cp.cuda.Device(3).use() 
+    cp.cuda.Device(3).use()
     process_all("inputs", "Positions", "hitmap")
