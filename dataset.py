@@ -8,8 +8,6 @@ import os
 import torch.nn.functional as F
 import pandas as pd
 
-from utils import convert_to_polar, convert_to_cartesian, find_FSPL
- 
 class RadioMapDataset(Dataset):
     def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None):
         self.inputs_dir = Path(inputs_dir)
@@ -31,19 +29,10 @@ class RadioMapDataset(Dataset):
         # Load RGB (3-channel physical input)
         rgb = Image.open(self.inputs_dir / fname).convert("RGB")
         rgb_tensor = self.to_tensor(rgb)  # [3, H, W]
-        C, H, W = rgb_tensor.shape
-        center = (W // 2, H // 2)
         rgb_tensor[0] = 255 * rgb_tensor[0] / 20
         rgb_tensor[1] = 255 * rgb_tensor[1] / 40
-        rgb_tensor[2] = 255 * rgb_tensor[2] / 100
-        rgb_tensor[2] = find_FSPL(fname, rgb_tensor[2]) # [H, W] -> [H, W] FSPL map
-        polar_T = convert_to_polar(rgb_tensor[1].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
-        polar_FSPL = convert_to_polar(rgb_tensor[2].unsqueeze(0), center) # [1, H, W] -> [1, num_radial, num_angles]
-        T_cumsum_polar = torch.cumsum(polar_T[0], dim=0)    
-        modified_polar_fspl = polar_FSPL[0] + T_cumsum_polar    
-        modified_fspl_map = convert_to_cartesian(modified_polar_fspl.unsqueeze(0), center, (H, W))
-        rgb_tensor[2] = modified_fspl_map.squeeze(0)
-        
+        rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
+
         # Load GT PL map (grayscale)
         gt = Image.open(self.outputs_dir / fname).convert("L")
         gt_tensor = self.to_tensor(gt)
@@ -80,6 +69,12 @@ class RadioMapDataset(Dataset):
         else:
             hit_tensor = torch.zeros((1, h, w)).float()
 
+
+        # Load Tx position and create Gaussian heatmap
+        # pos_file, tx_idx = self._find_position_file(fname)
+        # tx_x, tx_y = self._load_tx_xy(pos_file, tx_idx)
+        # heatmap = self._generate_gaussian_heatmap(tx_x, tx_y, h, w, sigma=25.0).unsqueeze(0)
+
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
         input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
@@ -114,5 +109,3 @@ class RadioMapDataset(Dataset):
         if row_index >= len(df):
             raise IndexError(f"Tx index {row_index} out of range in {filepath}")
         return float(df.iloc[row_index]['X']), float(df.iloc[row_index]['Y'])
-
-

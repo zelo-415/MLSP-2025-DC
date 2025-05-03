@@ -40,6 +40,8 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     # 合并 & padding
     input_tensor = torch.cat([rgb_tensor, sparse_tensor], dim=0)
     _, h, w = input_tensor.shape
+    if tx_x>h or tx_y > w or tx_x<0 or tx_y<0:
+        print('Weird!')
     pad_h = (32 - h % 32) % 32
     pad_w = (32 - w % 32) % 32
     input_tensor = F.pad(input_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
