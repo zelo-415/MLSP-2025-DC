@@ -62,7 +62,8 @@ for epoch in range(1, epochs + 1):
     model.train()
     train_loss = 0
     loop = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}")
-    for inputs, targets, masks in loop:
+    for inputs, hits, targets, masks in loop:
+        inputs = torch.cat((inputs, hits), dim=1)  # Concatenate RGB and hit map
         inputs = inputs.to(device)
         targets = targets.to(device)
         masks = masks.to(device)
@@ -85,7 +86,8 @@ for epoch in range(1, epochs + 1):
     model.eval()
     val_loss = 0
     with torch.no_grad():
-        for inputs, targets, masks in val_loader:
+        for inputs, hits, targets, masks in val_loader:
+            inputs = torch.cat((inputs, hits), dim=1)
             inputs = inputs.to(device)
             targets = targets.to(device)
             masks = masks.to(device)

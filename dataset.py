@@ -77,9 +77,9 @@ class RadioMapDataset(Dataset):
 
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
-        input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
+        # input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 
-        return input_tensor, gt_tensor, mask_map
+        return input_tensor, hit_tensor, gt_tensor, mask_map
 
     def pad_all(self, input_tensor, hit_tensor, gt_tensor, mask_tensor):
         _, h, w = input_tensor.shape

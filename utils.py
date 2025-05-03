@@ -35,15 +35,16 @@ def custom_collate_fn(batch):
      max_w = max(item[0].shape[2] for item in batch)
  
      padded_batch = []
-     for input_tensor, gt_tensor, mask_tensor in batch:
+     for input_tensor, hit_tensor, gt_tensor, mask_tensor in batch:
          pad_h = max_h - input_tensor.shape[1]
          pad_w = max_w - input_tensor.shape[2]
  
          input_p = F.pad(input_tensor, (0, pad_w, 0, pad_h), value=0)
+         hit_p = F.pad(hit_tensor, (0, pad_w, 0, pad_h), value=1)
          gt_p = F.pad(gt_tensor, (0, pad_w, 0, pad_h), value=0)
-         mask_p = F.pad(mask_tensor, (0, pad_w, 0, pad_h), value=0)
+         mask_p = F.pad(mask_tensor, (0, pad_w, 0, pad_h), value=1)
  
-         padded_batch.append((input_p, gt_p, mask_p))
+         padded_batch.append((input_p, hit_p, gt_p, mask_p))
  
-     inputs, gts, masks = zip(*padded_batch)
-     return torch.stack(inputs), torch.stack(gts), torch.stack(masks)
+     inputs, hits, gts, masks = zip(*padded_batch)
+     return torch.stack(inputs), torch.stack(hits), torch.stack(gts), torch.stack(masks)
