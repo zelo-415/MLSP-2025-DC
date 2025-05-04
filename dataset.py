@@ -35,8 +35,7 @@ class RadioMapDataset(Dataset):
         center = (W // 2, H // 2)
         rgb_tensor[0] = 255 * rgb_tensor[0] / 20
         rgb_tensor[1] = 255 * rgb_tensor[1] / 40
-        rgb_tensor[2] = 255 * rgb_tensor[2] / 100
-        rgb_tensor[2] = find_FSPL(fname, rgb_tensor[2]) # [H, W] -> [H, W] FSPL map
+        rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
         
         # Load GT PL map (grayscale)
         gt = Image.open(self.outputs_dir / fname).convert("L")
@@ -74,13 +73,7 @@ class RadioMapDataset(Dataset):
         else:
             hit_tensor = torch.zeros((1, h, w)).float()
 
-        hit_tensor = hit_tensor+1
-        #rgb_tensor[2] *= hit_tensor.squeeze()  
-        hit_tensor = hit_tensor.squeeze() * rgb_tensor[2]
-        hit_tensor = hit_tensor.unsqueeze(0)  # [1, H, W]
-
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
-        input_tensor = rgb_tensor
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
         input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 

@@ -3,11 +3,8 @@ import numpy as np
 from pathlib import Path
 from PIL import Image
 from torchvision import transforms
-import torch
 import pandas as pd
 from tqdm import tqdm
-from utils import find_FSPL
-
 
 def _bresenhamlines_integer(start, end):
     """
@@ -38,25 +35,21 @@ def _bresenhamlines_integer(start, end):
 
 def generate_wall_mask(png_path):
     img = Image.open(png_path).convert("RGB")
-    
-    rgb_array = np.array(img)  # Convert image to NumPy array
-
-    G = rgb_array[:, :, 1]
-    d = rgb_array[:, :, 2]
-    #print(f"G: {np.min(G)}, {np.max(G)}")
-    return G.astype(np.float32), d.astype(np.float32)
+    rgb_tensor = transforms.ToTensor()(img)
+    R, G = rgb_tensor[0].numpy(), rgb_tensor[1].numpy()
+    return ((R != 0) | (G != 0)).astype(np.uint8)
 
 def generate_hit_map(wall_mask, tx_x, tx_y):
     H, W = wall_mask.shape
-    wall_gpu = cp.asarray(wall_mask, dtype=cp.float32)
+    wall_gpu = cp.asarray(wall_mask, dtype=cp.uint8)
 
-    y, x = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
-    all_points = cp.stack((y.ravel(), x.ravel()), axis=1).astype(cp.int32)
+    x, y = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
+    all_points = cp.stack((x.ravel(), y.ravel()), axis=1).astype(cp.int32)
 
     # Ensure tx_x, tx_y are plain Python ints
     tx_x = int(tx_x)
     tx_y = int(tx_y)
-    tx = cp.array([[tx_y, tx_x]], dtype=cp.int32) 
+    tx = cp.array([[tx_x, tx_y]], dtype=cp.int32) 
     tx_batch = cp.repeat(tx, all_points.shape[0], axis=0)
 
     lines = _bresenhamlines_integer(all_points, tx_batch)  # (N, L, 2)
@@ -71,7 +64,7 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     flat_vals[~valid] = 0
     flat_vals = flat_vals.reshape(N, L)
 
-    hits = cp.sum(flat_vals[:, 1:], axis=1)  # exclude TX point
+    hits = cp.sum((flat_vals[:, 1:] - flat_vals[:, :-1]) == 1, axis=1)
     return cp.asnumpy(hits.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):
@@ -86,15 +79,11 @@ def process_all(inputs_dir, positions_dir, output_dir):
             scene, s_idx = '_'.join(fname.split('_')[:-1]), int(fname.split('_')[-1][1:])
             pos_path = Path(positions_dir) / f"Positions_{scene}.csv"
             df = pd.read_csv(pos_path)
-            tx_x = int(df.loc[s_idx, "Y"].item())
-            tx_y = int(df.loc[s_idx, "X"].item())
+            tx_x = int(df.loc[s_idx, "X"].item())
+            tx_y = int(df.loc[s_idx, "Y"].item())
 
-            wall_mask, d = generate_wall_mask(img_path)
+            wall_mask = generate_wall_mask(img_path)
             hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
-            #print(f"Hit map: {np.min(hit_map)}, {np.max(hit_map)}")
-            fspl = find_FSPL(fname, torch.tensor(d).float()).numpy()
-            hit_map = fspl+hit_map
-            
             np.save(output_dir / f"{scene}_S{s_idx}_hit.npy", hit_map)
 
         except Exception as e:

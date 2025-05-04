@@ -27,7 +27,7 @@ def visualize_dataset(dataset, index, output_dir):
     num_channels = input_np.shape[0]
     for i in range(num_channels):
         plt.figure(figsize=(6, 6))
-        plt.imshow(input_np[i], cmap="viridis")
+        plt.imshow(input_np[i], cmap="hot")
         plt.title(f"Input Channel {i+1}")
         plt.axis("off")
         plt.savefig(output_dir / f"input_channel_{i+1}_index_{index}.png", bbox_inches="tight")

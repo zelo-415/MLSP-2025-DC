@@ -33,7 +33,7 @@ batch_size = 4
 epochs = 50
 lr = 1e-4
 val_ratio = 0.2
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
 
 # ==== Load dataset ====
 full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir=None, hit_dir=hit_dir)
