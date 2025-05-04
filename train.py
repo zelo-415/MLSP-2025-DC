@@ -83,27 +83,52 @@ for epoch in range(1, epochs + 1):
     print(f"Epoch {epoch}: Train RMSE = {avg_train_loss:.4f}")
 
     # Validation
+    # model.eval()
+    # val_loss = 0
+    # with torch.no_grad():
+    #     for inputs, hits, targets, masks in val_loader:
+    #         inputs = torch.cat((inputs, hits), dim=1)
+    #         inputs = inputs.to(device)
+    #         targets = targets.to(device)
+    #         masks = masks.to(device)
+
+    #         preds = model(inputs)
+    #         loss = criterion(preds, targets, masks)
+    #         val_loss += loss.item()
+
+    # avg_val_loss = val_loss / len(val_loader)
+    # val_losses.append(avg_val_loss)  
+    # print(f"Epoch {epoch}: Val RMSE = {avg_val_loss:.4f}")
+
+    # if avg_val_loss < best_val_loss:
+    #     best_val_loss = avg_val_loss
+    #     save_checkpoint(model, "checkpoints/best_model.pth")
+    #     print("Saved best model.")
     model.eval()
-    val_loss = 0
+    val_squared_error_sum = 0.0
+    val_pixel_count = 0
+
     with torch.no_grad():
         for inputs, hits, targets, masks in val_loader:
-            inputs = torch.cat((inputs, hits), dim=1)
-            inputs = inputs.to(device)
+            inputs = torch.cat((inputs, hits), dim=1).to(device)
             targets = targets.to(device)
             masks = masks.to(device)
 
             preds = model(inputs)
-            loss = criterion(preds, targets, masks)
-            val_loss += loss.item()
+            diff_sq = ((preds - targets) * 255) ** 2
+            valid_mask = 1 - masks
+            val_squared_error_sum += (diff_sq * valid_mask).sum().item()
+            val_pixel_count += valid_mask.sum().item()
 
-    avg_val_loss = val_loss / len(val_loader)
-    val_losses.append(avg_val_loss)  
-    print(f"Epoch {epoch}: Val RMSE = {avg_val_loss:.4f}")
+    global_val_rmse = (val_squared_error_sum / max(val_pixel_count, 1)) ** 0.5
+    val_losses.append(global_val_rmse)
+    print(f"Epoch {epoch}: Global Val RMSE = {global_val_rmse:.4f}")
 
-    if avg_val_loss < best_val_loss:
-        best_val_loss = avg_val_loss
+    if global_val_rmse < best_val_loss:
+        best_val_loss = global_val_rmse
         save_checkpoint(model, "checkpoints/best_model.pth")
         print("Saved best model.")
+
 
 # Visualize loss curves
 plot_loss_curve(train_losses, val_losses, "checkpoints/loss_curve.png")  
