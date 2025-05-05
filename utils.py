@@ -8,13 +8,13 @@ import os
 import math
 import cupy as cp
  
-def MSELoss():
-     def masked_mse(pred, target, mask):
+def RMSELoss():
+     def masked_rmse(pred, target, mask):
          diff = ((pred - target)*255) ** 2
          masked_diff = diff * (1 - mask)  # Only penalize on non-sampled locations
          mse = masked_diff.sum() / (1 - mask).sum().clamp(min=1.0)
-         return mse
-     return masked_mse
+         return torch.sqrt(mse)
+     return masked_rmse
 
 @torch.no_grad()
 def compute_rmse(pred, target, mask):
@@ -182,54 +182,3 @@ def convert_to_cartesian(polar_tensor: torch.Tensor, center: tuple[int, int], or
 
     return cartesian_tensor.squeeze(0)
 
-def _bresenhamline_nslope(slope):
-    scale = cp.amax(cp.abs(slope), axis=1).reshape(-1, 1)
-    zeroslope = (scale == 0).all(1)
-    scale[zeroslope] = 1
-    normalizedslope = slope / scale
-    normalizedslope[zeroslope] = 0
-    return normalizedslope
-
-def _bresenhamlines(start, end):
-    max_iter = cp.amax(cp.abs(end - start), axis=1).astype(cp.int32).max()
-    steps = cp.arange(1, max_iter + 1, dtype=cp.int32).reshape(-1, 1)
-    nslope = _bresenhamline_nslope(end - start)
-    bline = start[:, None, :] + nslope[:, None, :] * steps
-    return cp.rint(bline).astype(cp.int32)
-
-def accumulate_channel_along_paths(channel_map, tx_x, tx_y):
-    """
-    Accumulate the values of a channel map along the paths from the transmitter to all points in the map.
-    
-    Args:
-        channel_map (np.ndarray): 2D numpy array representing the channel map.
-        tx_x (int): Transmitter x coordinate.
-        tx_y (int): Transmitter y coordinate.
-        
-    Returns:
-        np.ndarray: 2D numpy array representing the accumulated values along the paths.
-    """
-    H, W = channel_map.shape
-    channel_gpu = cp.asarray(channel_map, dtype=cp.float32)
-
-    y, x = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
-    all_points = cp.stack((y.ravel(), x.ravel()), axis=1).astype(cp.int32)
-
-    tx = cp.array([[tx_x, tx_y]], dtype=cp.int32)
-    tx_batch = cp.repeat(tx, all_points.shape[0], axis=0)
-
-    lines = _bresenhamlines(all_points, tx_batch)  # (N, L, 2)
-    flat_lines = lines.reshape(-1, 2)
-
-    valid_mask = (
-        (flat_lines[:, 0] >= 0) & (flat_lines[:, 0] < H) &
-        (flat_lines[:, 1] >= 0) & (flat_lines[:, 1] < W)
-    )
-    valid_lines = flat_lines[valid_mask]
-    values = cp.zeros(flat_lines.shape[0], dtype=cp.float32)
-    values[valid_mask] = channel_gpu[valid_lines[:, 0], valid_lines[:, 1]]
-    values = values.reshape(lines.shape[0], lines.shape[1])
-
-    accumulated = cp.sum(values, axis=1)
-
-    return cp.asnumpy(accumulated.reshape(H, W))

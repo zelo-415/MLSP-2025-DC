@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from utils import convert_to_polar, convert_to_cartesian, find_FSPL, accumulate_channel_along_paths
+from utils import convert_to_polar, convert_to_cartesian, find_FSPL
  
 class RadioMapDataset(Dataset):
     def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None, acc_dir = None):
