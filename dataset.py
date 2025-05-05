@@ -111,10 +111,7 @@ class RadioMapDataset(Dataset):
             acc_tensor = torch.zeros((1, h, w)).float()   
 
         # Final normalization
-        input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
-        # input_tensor[0] = input_tensor[0] / (input_tensor[0].max() + 1e-6) 
-        # input_tensor[2] = input_tensor[2] / (input_tensor[2].max() + 1e-6)  
-
+        input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0) 
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
         input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 
@@ -126,7 +123,7 @@ class RadioMapDataset(Dataset):
         pad_w = (32 - w % 32) % 32
 
         input_tensor = F.pad(input_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
-        hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1)
+        hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
         gt_tensor = F.pad(gt_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
         mask_tensor = F.pad(mask_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1)
 
