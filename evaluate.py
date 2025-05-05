@@ -7,7 +7,7 @@ from PIL import Image
 from pathlib import Path
 from tqdm import tqdm
 from model import UNet
-from hit_batch import generate_wall_mask, generate_hit_map
+from hit_batch1 import generate_wall_mask, generate_hit_map
 from utils import find_FSPL
 import matplotlib.pyplot as plt  # Add this import
 
@@ -24,7 +24,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     s_idx = int(name.split("_")[-1][1:])
     pos_path = Path(positions_dir) / f"Positions_{scene}.csv"
     df = pd.read_csv(pos_path)
-    tx_y, tx_x = int(df.loc[s_idx, "X"]), int(df.loc[s_idx, "Y"])
+    tx_x, tx_y = int(df.loc[s_idx, "X"]), int(df.loc[s_idx, "Y"])
 
     # RGB 预处理
     rgb = Image.open(rgb_path).convert("RGB")
@@ -88,7 +88,7 @@ def save_visualizations(inputs, outputs, h, w, sample_names, output_dir, num_sam
         fig.suptitle(f"Sample: {sample_names[i]}")
 
         for c in range(num_channels):
-            axes[c].imshow(input_sample[c, :h, :w], cmap="gray")
+            axes[c].imshow(input_sample[c], cmap="gray")
             axes[c].set_title(f"Input Channel {c+1}")
             axes[c].axis("off")
 
@@ -103,7 +103,7 @@ def save_visualizations(inputs, outputs, h, w, sample_names, output_dir, num_sam
 
 @torch.no_grad()
 def main():
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model = UNet(in_channels=5, out_channels=1).to(device)
     model.load_state_dict(torch.load("checkpoints/best_model.pth", map_location=device))
     model.eval()
@@ -127,7 +127,7 @@ def main():
         all_pls.extend(pls)
 
         # Collect samples for visualization
-        if idx > 26 and idx < 32:  # Limit to 5 samples
+        if idx > 1 and idx < 7:  # Limit to 5 samples
             input_samples.append(input_tensor[0])  # First sample in the batch
             output_samples.append(pred[0])  # First prediction in the batch
             sample_names.append(name)
@@ -137,8 +137,8 @@ def main():
         save_visualizations(
             torch.stack(input_samples),
             torch.stack(output_samples),
-            h,
-            w,
+            1000,
+            1000,
             sample_names,
             visualization_dir,
         )

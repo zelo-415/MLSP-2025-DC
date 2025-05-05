@@ -5,6 +5,8 @@ from PIL import Image
 from torchvision import transforms
 import pandas as pd
 from tqdm import tqdm
+import torch
+from utils import find_FSPL
 
 def _bresenhamlines_integer(start, end):
     """
@@ -33,11 +35,17 @@ def _bresenhamlines_integer(start, end):
     lines = cp.stack((y, x), axis=-1)  # (N, max_len, 2)
     return lines
 
+
 def generate_wall_mask(png_path):
     img = Image.open(png_path).convert("RGB")
-    rgb_tensor = transforms.ToTensor()(img)
-    R, G = rgb_tensor[0].numpy(), rgb_tensor[1].numpy()
-    return ((R != 0) | (G != 0)).astype(np.uint8)
+    
+    rgb_array = np.array(img)  # Convert image to NumPy array
+
+    G = rgb_array[:, :, 1]
+    d = rgb_array[:, :, 2]
+    #print(f"G: {np.min(G)}, {np.max(G)}")
+    return G.astype(np.float32), d.astype(np.float32)
+
 
 def generate_hit_map(wall_mask, tx_x, tx_y):
     H, W = wall_mask.shape
@@ -64,7 +72,7 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     flat_vals[~valid] = 0
     flat_vals = flat_vals.reshape(N, L)
 
-    hits = cp.sum((flat_vals[:, 1:] - flat_vals[:, :-1]) == 1, axis=1)
+    hits = cp.sum((flat_vals[:, 1:] - flat_vals[:, :-1]), axis=1)
     return cp.asnumpy(hits.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):
@@ -82,13 +90,14 @@ def process_all(inputs_dir, positions_dir, output_dir):
             tx_x = int(df.loc[s_idx, "X"].item())
             tx_y = int(df.loc[s_idx, "Y"].item())
 
-            wall_mask = generate_wall_mask(img_path)
+            wall_mask, d = generate_wall_mask(img_path)
             hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
-            np.save(output_dir / f"{scene}_S{s_idx}_hit.npy", hit_map)
+            fspl = find_FSPL(fname, torch.tensor(d).float()).numpy()
+            hit_map = fspl+hit_map
 
         except Exception as e:
             print(f"[ERROR] {img_path.name}: {e}")
 
 if __name__ == "__main__":
-    cp.cuda.Device(3).use()
+    cp.cuda.Device(1).use()
     process_all("inputs", "Positions", "hitmap")

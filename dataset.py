@@ -7,6 +7,7 @@ from pathlib import Path
 import os
 import torch.nn.functional as F
 import pandas as pd
+import random  # Add this import
 
 from utils import convert_to_polar, convert_to_cartesian, find_FSPL
  
@@ -50,15 +51,6 @@ class RadioMapDataset(Dataset):
             sparse_map[0, int(y), int(x)] = pl / 100.0  # Normalization
             mask_map[0, int(y), int(x)] = 1.0
         
-        # Load lost samples if available
-        if self.los_dir:
-            los_fname = Path(fname).stem + "_los.npy"
-            los_path = self.los_dir / los_fname
-            los_map = np.load(los_path)
-            los_tensor = torch.from_numpy(los_map).unsqueeze(0) # [1, H, W]
-        else:
-            los_tensor = torch.zeros((1, h, w))
-        
         if self.hit_dir:
             hit_fname = Path(fname).stem + "_hit.npy"
             hit_path = self.hit_dir / hit_fname
@@ -73,6 +65,25 @@ class RadioMapDataset(Dataset):
         else:
             hit_tensor = torch.zeros((1, h, w)).float()
 
+        # Perform cropping around the transmitter with 30% probability
+        if random.random() < .3:
+            pos_file, s_idx = self._find_position_file(fname)
+            tx_y, tx_x = self._load_tx_xy(pos_file, s_idx)
+            crop_size_x = W // 2  # Define the crop size (e.g., 128x128)
+            crop_size_y = H // 2  # Define the crop size (e.g., 128x128)
+            x_min = max(0, int(tx_x - crop_size_x // 2))
+            y_min = max(0, int(tx_y - crop_size_y // 2))
+            x_max = min(w, x_min + crop_size_x)
+            y_max = min(h, y_min + crop_size_y)
+
+            # Crop all tensors
+            rgb_tensor = rgb_tensor[:, y_min:y_max, x_min:x_max]
+            gt_tensor = gt_tensor[:, y_min:y_max, x_min:x_max]
+            sparse_map = sparse_map[:, y_min:y_max, x_min:x_max]
+            mask_map = mask_map[:, y_min:y_max, x_min:x_max]
+            hit_tensor = hit_tensor[:, y_min:y_max, x_min:x_max]
+
+        # Concatenate tensors
         input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0)
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
         input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
