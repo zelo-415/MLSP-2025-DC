@@ -45,11 +45,9 @@ train_set, val_set = random_split(full_dataset, [train_size, val_size], generato
 train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collate_fn=custom_collate_fn)
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
 
-example_input, example_target, example_mask = train_set[0]
-C, H, W = example_input.shape
 
 # ==== Initialize model ====
-model = UNet(in_channels=C, out_channels=1).to(device)
+model = UNet(in_channels=5, out_channels=1).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 criterion = MSELoss()
 
