@@ -50,6 +50,8 @@ class RadioMapDataset(Dataset):
         for x, y, pl in sparse_points:
             sparse_map[0, int(y), int(x)] = pl / 100.0  # Normalization
             mask_map[0, int(y), int(x)] = 1.0
+
+        #print(f"sparse_map: {sparse_map.max()}, {sparse_map.min()}")
         
         if self.hit_dir:
             hit_fname = Path(fname).stem + "_hit.npy"
@@ -65,10 +67,9 @@ class RadioMapDataset(Dataset):
         else:
             hit_tensor = torch.zeros((1, h, w)).float()
 
-        # Perform cropping around the transmitter with 30% probability
-        if random.random() < .3:
-            pos_file, s_idx = self._find_position_file(fname)
-            tx_y, tx_x = self._load_tx_xy(pos_file, s_idx)
+        
+        if random.random() < .4 and H*W > 60e3:
+            tx_y, tx_x = self._load_tx_xy(fname)
             crop_size_x = W // 2  # Define the crop size (e.g., 128x128)
             crop_size_y = H // 2  # Define the crop size (e.g., 128x128)
             x_min = max(0, int(tx_x - crop_size_x // 2))
@@ -102,19 +103,11 @@ class RadioMapDataset(Dataset):
 
         return input_tensor, hit_tensor, gt_tensor, mask_tensor
 
-    def _find_position_file(self, fname):
-        base = Path(fname).stem  # e.g., B3_Ant3_f1_S2
-        building = base.split("_")[0]  # e.g., B3
-        s_part = base.split("_")[-1]   # e.g., S2
-        s_idx = int(s_part[1:])        # e.g., 2
-
-        pos_file = list(self.positions_dir.glob(f"Positions_{building}_*.csv"))
-        if not pos_file:
-            raise FileNotFoundError(f"No position file found for {fname}")
-        return pos_file[0], s_idx
-
-    def _load_tx_xy(self, filepath, row_index):
-        df = pd.read_csv(filepath)
-        if row_index >= len(df):
-            raise IndexError(f"Tx index {row_index} out of range in {filepath}")
-        return float(df.iloc[row_index]['X']), float(df.iloc[row_index]['Y'])
+    def _load_tx_xy(self, fname):
+        name = Path(fname).stem
+        scene = "_".join(name.split("_")[:-1])
+        s_idx = int(name.split("_")[-1][1:])
+        pos_path = Path(self.positions_dir) / f"Positions_{scene}.csv"
+        df = pd.read_csv(pos_path)
+        tx_x, tx_y = int(df.loc[s_idx, "X"]), int(df.loc[s_idx, "Y"])
+        return tx_x, tx_y

@@ -8,6 +8,9 @@ outputs/
 Positions/
 Radiation_Patterns/
 other_data/
+test_input
+rate0.5/
+visualizations/
 
 # === Ignore large/binary files ===
 *.zip

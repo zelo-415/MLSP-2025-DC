@@ -35,6 +35,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
 
 
     sparse_tensor = load_sparse_png(sparse_path)  # 注意这里不再除以100
+    #print(sparse_tensor.max(), sparse_tensor.min())
     # hitmap 生成
     wall_mask, d = generate_wall_mask(rgb_path)
     hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
@@ -49,7 +50,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     pad_h = (32 - h % 32) % 32
     pad_w = (32 - w % 32) % 32
     input_tensor = F.pad(input_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
-    hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1)
+    hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
     input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 
     return input_tensor.unsqueeze(0), h, w, name  # 返回完整 name
