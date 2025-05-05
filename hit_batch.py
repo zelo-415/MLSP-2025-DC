@@ -44,12 +44,12 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     wall_gpu = cp.asarray(wall_mask, dtype=cp.uint8)
 
     x, y = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
-    all_points = cp.stack((y.ravel(), x.ravel()), axis=1).astype(cp.int32)
+    all_points = cp.stack((x.ravel(), y.ravel()), axis=1).astype(cp.int32)
 
     # Ensure tx_x, tx_y are plain Python ints
     tx_x = int(tx_x)
     tx_y = int(tx_y)
-    tx = cp.array([[tx_y, tx_x]], dtype=cp.int32) 
+    tx = cp.array([[tx_x, tx_y]], dtype=cp.int32) 
     tx_batch = cp.repeat(tx, all_points.shape[0], axis=0)
 
     lines = _bresenhamlines_integer(all_points, tx_batch)  # (N, L, 2)
@@ -64,7 +64,7 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     flat_vals[~valid] = 0
     flat_vals = flat_vals.reshape(N, L)
 
-    hits = cp.sum(flat_vals[:, 1:] == 1, axis=1)  # exclude TX point
+    hits = cp.sum((flat_vals[:, 1:] - flat_vals[:, :-1]) == 1, axis=1)
     return cp.asnumpy(hits.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):

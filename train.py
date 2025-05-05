@@ -28,15 +28,16 @@ sparse_dir = data_root / "sparse_samples_0.5"
 positions_dir = data_root / "Positions"
 los_dir = data_root / "losmap"
 hit_dir = data_root / "hitmap"
+acc_dir = data_root / "accmap"
 
 batch_size = 4
 epochs = 50
 lr = 1e-4
 val_ratio = 0.2
-device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ==== Load dataset ====
-full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir=None, hit_dir=hit_dir)
+full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir=None, hit_dir=hit_dir, acc_dir=None)
 val_size = int(len(full_dataset) * val_ratio)
 train_size = len(full_dataset) - val_size
 generator = torch.Generator().manual_seed(42)
@@ -47,7 +48,7 @@ val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_f
 
 # ==== Initialize model ====
 model = UNet(in_channels=5, out_channels=1).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
 criterion = MSELoss()
 
 # ==== Training loop ====

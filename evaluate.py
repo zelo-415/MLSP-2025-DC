@@ -43,7 +43,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     pad_h = (32 - h % 32) % 32
     pad_w = (32 - w % 32) % 32
     input_tensor = F.pad(input_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
-    hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1)
+    hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
     input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 
     return input_tensor.unsqueeze(0), h, w, name  # 返回完整 name
@@ -62,9 +62,9 @@ def main():
     model.load_state_dict(torch.load("checkpoints/best_model.pth", map_location=device))
     model.eval()
 
-    input_dir = Path("./test_input")
-    sparse_dir = Path("./rate0.5/sampledGT")
-    pos_dir = Path("./test_positions")
+    input_dir = Path("Kaggle/test_input")
+    sparse_dir = Path("Kaggle/rate0.5/sampledGT")
+    pos_dir = Path("Kaggle/test_positions")
 
     all_ids, all_pls = [], []
 

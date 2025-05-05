@@ -17,7 +17,7 @@ class DoubleConv(nn.Module):
         return self.double_conv(x)
 
 class UNet(nn.Module):
-    def __init__(self, in_channels=5, out_channels=1):
+    def __init__(self, in_channels=6, out_channels=1):
         super().__init__()
         self.enc1 = DoubleConv(in_channels, 64)
         self.pool1 = nn.AvgPool2d(2)
