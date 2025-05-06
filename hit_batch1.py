@@ -10,6 +10,7 @@ def _bresenhamline_nslope(slope):
     scale = cp.amax(cp.abs(slope), axis=1).reshape(-1, 1)
     zeroslope = (scale == 0).all(1)
     scale[zeroslope] = 1
+    
     normalizedslope = slope / scale
     normalizedslope[zeroslope] = 0
     return normalizedslope
