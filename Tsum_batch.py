@@ -36,7 +36,7 @@ def _bresenhamlines_integer(start, end):
 def load_transmission(png_path):
     img = Image.open(png_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(img)
-    G = rgb_tensor[1].numpy()
+    G = 255 * rgb_tensor[1].numpy()
     return G
 
 def generate_Tsum_map(transmission, tx_x, tx_y):
