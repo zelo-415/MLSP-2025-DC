@@ -8,6 +8,8 @@ from pathlib import Path
 from tqdm import tqdm
 from model import UNet
 from hit_batch import generate_wall_mask, generate_hit_map
+from Tsum_batch import generate_Tsum_map, load_transmission
+from utils import test_FSPL
 
 def load_sparse_png(png_path):
     img = Image.open(png_path).convert("L")
@@ -27,18 +29,29 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     rgb = Image.open(rgb_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(rgb)
     rgb_tensor[0] = 255 * rgb_tensor[0] / 20
-    rgb_tensor[1] = 255 * rgb_tensor[1] / 40
-    rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
+    rgb_tensor[2] = 255 * rgb_tensor[2]
+    fspl_map = test_FSPL(rgb_tensor[2])
+    fspl_map = fspl_map / fspl_map.max()
+    fspl_map = fspl_map.unsqueeze(0)
+    rgb_tensor[2] = torch.log10(1 + rgb_tensor[2]) / 2.5
+    h,w = rgb_tensor.shape[1:]
 
     sparse_tensor = load_sparse_png(sparse_path)  # 注意这里不再除以100
     # hitmap 生成
     wall_mask = generate_wall_mask(rgb_path)
     hitmap = generate_hit_map(wall_mask, tx_x, tx_y)
     hitmap = np.clip(hitmap, 0, 15) / 16.0
-    hit_tensor = torch.from_numpy(hitmap).unsqueeze(0).float()
+    # hit_tensor = torch.from_numpy(hitmap).unsqueeze(0).float()
+    hit_tensor = torch.zeros((1, h, w)).float()
+
+    transmission = load_transmission(rgb_path)
+    Tsum_map = generate_Tsum_map(transmission, tx_x, tx_y)
+    min_val, max_val = Tsum_map.min(), Tsum_map.max()
+    Tsum_map = (Tsum_map - min_val) / (max_val - min_val + 1e-6)
+    rgb_tensor[1] = torch.from_numpy(Tsum_map).float()
 
     # 合并 & padding
-    input_tensor = torch.cat([rgb_tensor, sparse_tensor], dim=0)
+    input_tensor = torch.cat([rgb_tensor, sparse_tensor, fspl_map], dim=0)
     _, h, w = input_tensor.shape
     pad_h = (32 - h % 32) % 32
     pad_w = (32 - w % 32) % 32
@@ -58,7 +71,7 @@ def flatten_output(output, h, w, name):
 @torch.no_grad()
 def main():
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
-    model = UNet(in_channels=5, out_channels=1).to(device)
+    model = UNet(in_channels=6, out_channels=1).to(device)
     model.load_state_dict(torch.load("checkpoints/best_model.pth", map_location=device))
     model.eval()
 
