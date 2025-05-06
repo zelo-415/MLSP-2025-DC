@@ -46,7 +46,7 @@ train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, collat
 val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_fn=custom_collate_fn)
 
 # ==== Initialize model ====
-model = UNet(in_channels=5, out_channels=1).to(device)
+model = UNet(in_channels=6, out_channels=1).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 criterion = RMSELoss()
 
