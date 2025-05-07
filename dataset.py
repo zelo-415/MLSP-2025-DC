@@ -39,7 +39,7 @@ class RadioMapDataset(Dataset):
         # rgb_tensor[1] = 255 * rgb_tensor[1] / 40
         rgb_tensor[2] = 255 * rgb_tensor[2]
         fspl_map = find_FSPL(fname, rgb_tensor[2])
-        fspl_map = fspl_map / fspl_map.max()
+        # fspl_map = fspl_map / fspl_map.max()
         fspl_map = fspl_map.unsqueeze(0)
         rgb_tensor[2] = torch.log10(1 + rgb_tensor[2]) / 2.5
         
@@ -106,7 +106,7 @@ class RadioMapDataset(Dataset):
             acc_path = self.acc_dir / acc_fname
             acc_map = np.load(acc_path)  # [H, W]
             acc_tensor = torch.from_numpy(acc_map)
-            merged_tensor = acc_tensor
+            merged_tensor = acc_tensor + fspl_map
             min_val, max_val = merged_tensor.min(), merged_tensor.max()
             merged_tensor = (merged_tensor - min_val) / (max_val - min_val + 1e-6)
         else:
@@ -115,7 +115,7 @@ class RadioMapDataset(Dataset):
         rgb_tensor[1] = merged_tensor
 
         # Final normalization
-        input_tensor = torch.cat([rgb_tensor, sparse_map, fspl_map], dim=0) 
+        input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0) 
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
         input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 
