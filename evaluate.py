@@ -31,7 +31,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     rgb_tensor[0] = 255 * rgb_tensor[0] / 20
     rgb_tensor[2] = 255 * rgb_tensor[2]
     fspl_map = test_FSPL(rgb_tensor[2])
-    fspl_map = fspl_map / fspl_map.max()
+    # fspl_map = fspl_map / fspl_map.max()
     fspl_map = fspl_map.unsqueeze(0)
     rgb_tensor[2] = torch.log10(1 + rgb_tensor[2]) / 2.5
     h,w = rgb_tensor.shape[1:]
@@ -45,13 +45,14 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     hit_tensor = torch.zeros((1, h, w)).float()
 
     transmission = load_transmission(rgb_path)
-    Tsum_map = generate_Tsum_map(transmission, tx_x, tx_y)
-    min_val, max_val = Tsum_map.min(), Tsum_map.max()
-    Tsum_map = (Tsum_map - min_val) / (max_val - min_val + 1e-6)
-    rgb_tensor[1] = torch.from_numpy(Tsum_map).float()
+    Tsum_map = generate_Tsum_map(transmission, tx_x, tx_y) 
+    Tsum_tensor = torch.from_numpy(Tsum_map).float() + fspl_map
+    min_val, max_val = Tsum_tensor.min(), Tsum_tensor.max()
+    Tsum_tensor = (Tsum_tensor - min_val) / (max_val - min_val + 1e-6)
+    rgb_tensor[1] = Tsum_tensor
 
     # 合并 & padding
-    input_tensor = torch.cat([rgb_tensor, sparse_tensor, fspl_map], dim=0)
+    input_tensor = torch.cat([rgb_tensor, sparse_tensor], dim=0)
     _, h, w = input_tensor.shape
     pad_h = (32 - h % 32) % 32
     pad_w = (32 - w % 32) % 32
@@ -71,7 +72,7 @@ def flatten_output(output, h, w, name):
 @torch.no_grad()
 def main():
     device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
-    model = UNet(in_channels=6, out_channels=1).to(device)
+    model = UNet(in_channels=5, out_channels=1).to(device)
     model.load_state_dict(torch.load("checkpoints/best_model.pth", map_location=device))
     model.eval()
 
