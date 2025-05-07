@@ -115,7 +115,7 @@ class RadioMapDataset(Dataset):
         rgb_tensor[1] = merged_tensor
 
         # Final normalization
-        input_tensor = torch.cat([rgb_tensor, sparse_map], dim=0) 
+        input_tensor = torch.cat([rgb_tensor,sparse_map], dim=0) 
         input_tensor, hit_tensor, gt_tensor, mask_map = self.pad_all(input_tensor, hit_tensor, gt_tensor, mask_map)
         input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 

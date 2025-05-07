@@ -31,13 +31,13 @@ hit_dir = data_root / "hitmap"
 acc_dir = data_root / "Tsummap"
 
 batch_size = 4
-epochs = 50
+epochs = 90
 lr = 1e-4
 val_ratio = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ==== Load dataset ====
-full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None, acc_dir=acc_dir)
+full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = hit_dir, acc_dir=acc_dir)
 val_size = int(len(full_dataset) * val_ratio)
 train_size = len(full_dataset) - val_size
 generator = torch.Generator().manual_seed(42)
