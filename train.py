@@ -31,7 +31,7 @@ hit_dir = data_root / "hitmap"
 acc_dir = data_root / "Tsummap"
 
 batch_size = 4
-epochs = 50
+epochs = 90
 lr = 1e-4
 val_ratio = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
