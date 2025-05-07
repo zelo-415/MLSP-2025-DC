@@ -41,8 +41,8 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     wall_mask = generate_wall_mask(rgb_path)
     hitmap = generate_hit_map(wall_mask, tx_x, tx_y)
     hitmap = np.clip(hitmap, 0, 15) / 16.0
-    # hit_tensor = torch.from_numpy(hitmap).unsqueeze(0).float()
-    hit_tensor = torch.zeros((1, h, w)).float()
+    hit_tensor = torch.from_numpy(hitmap).unsqueeze(0).float()
+    # hit_tensor = torch.zeros((1, h, w)).float()
 
     transmission = load_transmission(rgb_path)
     Tsum_map = generate_Tsum_map(transmission, tx_x, tx_y) 
