@@ -79,5 +79,5 @@ if __name__ == "__main__":
     output_dir = "visualizations"
 
     # Visualize and save a sample from the dataset
-    sample_index = 700  # Change this index to visualize other samples
+    sample_index = 400  # Change this index to visualize other samples
     visualize_dataset(dataset, sample_index, output_dir)

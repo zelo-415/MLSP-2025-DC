@@ -68,7 +68,7 @@ class RadioMapDataset(Dataset):
             hit_tensor = torch.zeros((1, h, w)).float()
 
         
-        if random.random() < .4 and H*W > 60e3:
+        if False and random.random() < .4 and H*W > 60e3:
             tx_y, tx_x = self._load_tx_xy(fname)
             crop_size_x = W // 2  # Define the crop size (e.g., 128x128)
             crop_size_y = H // 2  # Define the crop size (e.g., 128x128)
@@ -97,7 +97,7 @@ class RadioMapDataset(Dataset):
         pad_w = (32 - w % 32) % 32
 
         input_tensor = F.pad(input_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
-        hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1)
+        hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
         gt_tensor = F.pad(gt_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
         mask_tensor = F.pad(mask_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1)
 

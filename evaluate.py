@@ -34,9 +34,8 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
 
 
-    sparse_tensor = load_sparse_png(sparse_path)  # 注意这里不再除以100
-    #print(sparse_tensor.max(), sparse_tensor.min())
-    # hitmap 生成
+    sparse_tensor = load_sparse_png(sparse_path)  
+    
     wall_mask, d = generate_wall_mask(rgb_path)
     hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
     fspl = find_FSPL(name, torch.tensor(d).float()).numpy()

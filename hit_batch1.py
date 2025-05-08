@@ -99,5 +99,5 @@ def process_all(inputs_dir, positions_dir, output_dir):
             print(f"[ERROR] {img_path.name}: {e}")
 
 if __name__ == "__main__":
-    cp.cuda.Device(1).use()
+    cp.cuda.Device(3).use()
     process_all("inputs", "Positions", "hitmap")
