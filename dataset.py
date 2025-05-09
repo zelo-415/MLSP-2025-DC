@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from utils import convert_to_polar, convert_to_cartesian, find_FSPL
  
 class RadioMapDataset(Dataset):
-    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None, acc_dir = None):
+    def __init__(self, inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = None, acc_dir = None, freq_filter = None):
         self.inputs_dir = Path(inputs_dir)
         self.outputs_dir = Path(outputs_dir)
         self.sparse_dir = Path(sparse_dir)
@@ -21,7 +21,11 @@ class RadioMapDataset(Dataset):
         self.hit_dir = Path(hit_dir) if hit_dir else None
         self.acc_dir = Path(acc_dir) if acc_dir else None
 
-        self.filenames = sorted([f.name for f in self.inputs_dir.glob("*.png")])
+        all_files = [f.name for f in self.inputs_dir.glob("*.png")]
+        if freq_filter:
+            all_files = [f for f in all_files if f"_f{freq_filter}" in f]
+
+        self.filenames = sorted(all_files)
         self.to_tensor = transforms.ToTensor()
 
     def __len__(self):

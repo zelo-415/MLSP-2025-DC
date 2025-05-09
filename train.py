@@ -37,7 +37,7 @@ val_ratio = 0.2
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # ==== Load dataset ====
-full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = hit_dir, acc_dir=acc_dir)
+full_dataset = RadioMapDataset(inputs_dir, outputs_dir, sparse_dir, positions_dir, los_dir = None, hit_dir = hit_dir, acc_dir=acc_dir, freq_filter=None)
 val_size = int(len(full_dataset) * val_ratio)
 train_size = len(full_dataset) - val_size
 generator = torch.Generator().manual_seed(42)
@@ -50,6 +50,13 @@ val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, collate_f
 model = UNet(in_channels=5, out_channels=1).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 criterion = RMSELoss()
+# # ==== Load checkpoint if exists ====
+checkpoint_path = "checkpoints/best_model_base.pth"
+if os.path.exists(checkpoint_path):
+    print("Loading checkpoint...")
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+else:
+    print("No checkpoint found. Starting from scratch.")
 
 # ==== Training loop ====
 best_val_loss = float('inf')
