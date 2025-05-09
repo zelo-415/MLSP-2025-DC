@@ -33,15 +33,15 @@ def _bresenhamlines_integer(start, end):
     lines = cp.stack((y, x), axis=-1)  # (N, max_len, 2)
     return lines
 
-def generate_wall_mask(png_path):
+def load_transmission(png_path):
     img = Image.open(png_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(img)
-    R, G = rgb_tensor[0].numpy(), rgb_tensor[1].numpy()
-    return ((R != 0) | (G != 0)).astype(np.uint8)
+    G = 255 * rgb_tensor[1].numpy()
+    return G
 
-def generate_hit_map(wall_mask, tx_x, tx_y):
-    H, W = wall_mask.shape
-    wall_gpu = cp.asarray(wall_mask, dtype=cp.uint8)
+def generate_Tsum_map(transmission, tx_x, tx_y):
+    H, W = transmission.shape
+    transmission_gpu = cp.asarray(transmission, dtype=cp.float32)
 
     x, y = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
     all_points = cp.stack((x.ravel(), y.ravel()), axis=1).astype(cp.int32)
@@ -60,12 +60,19 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     flat_idx = ys * W + xs
     flat_idx[~valid] = 0  # out-of-bound locations set to 0 index
 
-    flat_vals = wall_gpu.ravel()[flat_idx]
+    flat_vals = transmission_gpu.ravel()[flat_idx]
     flat_vals[~valid] = 0
     flat_vals = flat_vals.reshape(N, L)
 
-    hits = cp.sum((flat_vals[:, 1:] - flat_vals[:, :-1]) == 1, axis=1)
-    return cp.asnumpy(hits.reshape(H, W))
+    prev = flat_vals[:, :-1]
+    curr = flat_vals[:, 1:]
+    add_mask = (prev == 0) & (curr > 0)
+
+    contrib = cp.zeros_like(curr)
+    contrib[add_mask] = curr[add_mask]
+
+    result = cp.sum(contrib, axis=1)
+    return cp.asnumpy(result.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):
     inputs_dir = Path(inputs_dir)
@@ -73,7 +80,7 @@ def process_all(inputs_dir, positions_dir, output_dir):
     output_dir.mkdir(parents=True, exist_ok=True)
     all_images = sorted(inputs_dir.glob("*.png"))
 
-    for img_path in tqdm(all_images, desc="Generating Hit Maps"):
+    for img_path in tqdm(all_images, desc="Generating Tsum Maps"):
         try:
             fname = img_path.stem
             scene, s_idx = '_'.join(fname.split('_')[:-1]), int(fname.split('_')[-1][1:])
@@ -82,13 +89,13 @@ def process_all(inputs_dir, positions_dir, output_dir):
             tx_x = int(df.loc[s_idx, "X"].item())
             tx_y = int(df.loc[s_idx, "Y"].item())
 
-            wall_mask = generate_wall_mask(img_path)
-            hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
-            np.save(output_dir / f"{scene}_S{s_idx}_hit.npy", hit_map)
+            transmission = load_transmission(img_path)
+            Tsum_map = generate_Tsum_map(transmission, tx_x, tx_y)
+            np.save(output_dir / f"{scene}_S{s_idx}_Tsum.npy", Tsum_map)
 
         except Exception as e:
             print(f"[ERROR] {img_path.name}: {e}")
 
 if __name__ == "__main__":
-    cp.cuda.Device(3).use()
-    process_all("inputs", "Positions", "hitmap")
+    cp.cuda.Device().use()
+    process_all("inputs", "Positions", "Tsummap")

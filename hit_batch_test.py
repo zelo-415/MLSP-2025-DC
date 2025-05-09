@@ -68,19 +68,23 @@ def generate_hit_map(wall_mask, tx_x, tx_y):
     return cp.asnumpy(hits.reshape(H, W))
 
 def process_all(inputs_dir, positions_dir, output_dir):
+    
+
     inputs_dir = Path(inputs_dir)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     all_images = sorted(inputs_dir.glob("*.png"))
-
+    print(f"Found {len(all_images)} images in {inputs_dir}")
     for img_path in tqdm(all_images, desc="Generating Hit Maps"):
         try:
             fname = img_path.stem
             scene, s_idx = '_'.join(fname.split('_')[:-1]), int(fname.split('_')[-1][1:])
             pos_path = Path(positions_dir) / f"Positions_{scene}.csv"
-            df = pd.read_csv(pos_path)
-            tx_x = int(df.loc[s_idx, "X"].item())
-            tx_y = int(df.loc[s_idx, "Y"].item())
+
+            df = pd.read_csv(pos_path, index_col=0)  # 第一列作为索引
+            tx_x = int(df.loc[s_idx, "X"])
+            tx_y = int(df.loc[s_idx, "Y"])
+
 
             wall_mask = generate_wall_mask(img_path)
             hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
@@ -91,4 +95,4 @@ def process_all(inputs_dir, positions_dir, output_dir):
 
 if __name__ == "__main__":
     cp.cuda.Device(3).use()
-    process_all("inputs", "Positions", "hitmap")
+    process_all("test/Inputs/Task_1", "test/Test_Data_Positions", "test/hitmap")

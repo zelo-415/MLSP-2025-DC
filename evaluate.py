@@ -8,6 +8,8 @@ from pathlib import Path
 from tqdm import tqdm
 from model import UNet
 from hit_batch import generate_wall_mask, generate_hit_map
+from Tsum_batch import generate_Tsum_map, load_transmission
+from utils import test_FSPL
 
 def load_sparse_png(png_path):
     img = Image.open(png_path).convert("L")
@@ -27,8 +29,12 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     rgb = Image.open(rgb_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(rgb)
     rgb_tensor[0] = 255 * rgb_tensor[0] / 20
-    rgb_tensor[1] = 255 * rgb_tensor[1] / 40
-    rgb_tensor[2] = torch.log10(1 + 255 * rgb_tensor[2]) / 2.5
+    rgb_tensor[2] = 255 * rgb_tensor[2]
+    fspl_map = test_FSPL(rgb_tensor[2])
+    # fspl_map = fspl_map / fspl_map.max()
+    fspl_map = fspl_map.unsqueeze(0)
+    rgb_tensor[2] = torch.log10(1 + rgb_tensor[2]) / 2.5
+    h,w = rgb_tensor.shape[1:]
 
     sparse_tensor = load_sparse_png(sparse_path)  # 注意这里不再除以100
     # hitmap 生成
@@ -36,6 +42,14 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     hitmap = generate_hit_map(wall_mask, tx_x, tx_y)
     hitmap = np.clip(hitmap, 0, 15) / 16.0
     hit_tensor = torch.from_numpy(hitmap).unsqueeze(0).float()
+    # hit_tensor = torch.zeros((1, h, w)).float()
+
+    transmission = load_transmission(rgb_path)
+    Tsum_map = generate_Tsum_map(transmission, tx_x, tx_y) 
+    Tsum_tensor = torch.from_numpy(Tsum_map).float() + fspl_map
+    min_val, max_val = Tsum_tensor.min(), Tsum_tensor.max()
+    Tsum_tensor = (Tsum_tensor - min_val) / (max_val - min_val + 1e-6)
+    rgb_tensor[1] = Tsum_tensor
 
     # 合并 & padding
     input_tensor = torch.cat([rgb_tensor, sparse_tensor], dim=0)
@@ -43,7 +57,7 @@ def prepare_input(rgb_path, sparse_path, positions_dir):
     pad_h = (32 - h % 32) % 32
     pad_w = (32 - w % 32) % 32
     input_tensor = F.pad(input_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
-    hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=1)
+    hit_tensor = F.pad(hit_tensor, (0, pad_w, 0, pad_h), mode='constant', value=0)
     input_tensor = torch.cat([input_tensor, hit_tensor], dim=0)
 
     return input_tensor.unsqueeze(0), h, w, name  # 返回完整 name
@@ -62,9 +76,9 @@ def main():
     model.load_state_dict(torch.load("checkpoints/best_model.pth", map_location=device))
     model.eval()
 
-    input_dir = Path("./test_input")
-    sparse_dir = Path("./rate0.5/sampledGT")
-    pos_dir = Path("./test_positions")
+    input_dir = Path("Kaggle/test_input")
+    sparse_dir = Path("Kaggle/rate0.5/sampledGT")
+    pos_dir = Path("Kaggle/test_positions")
 
     all_ids, all_pls = [], []
 
