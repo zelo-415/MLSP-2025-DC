@@ -1,161 +1,86 @@
-import cupy as cp
 import numpy as np
-from pathlib import Path
-from PIL import Image
-from torchvision import transforms
-import pandas as pd
-from tqdm import tqdm
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
-def _bresenhamlines_integer(start, end):
-    """
-    Vectorized integer Bresenham line generator using CuPy.
-    Args:
-        start: (N, 2) tensor, each row is (y1, x1)
-        end: (N, 2) tensor, each row is (y2, x2)
-    Returns:
-        lines: (N, L, 2) tensor of integer coordinates
-    """
-    N = start.shape[0]
-    dy = end[:, 0] - start[:, 0]
-    dx = end[:, 1] - start[:, 1]
-
-    steps = cp.maximum(cp.abs(dy), cp.abs(dx)) + 1  # shape (N,)
-    max_len = int(cp.max(steps).item())  # convert to Python int to avoid ndarray error
-
-    t = cp.arange(max_len, dtype=cp.int32).reshape(1, -1)  # (1, max_len)
-    t = cp.broadcast_to(t, (N, max_len))
-
-    ratio = cp.clip(t / (steps[:, None] - 1 + 1e-6), 0, 1)  # avoid division by zero
-
-    y = cp.rint(start[:, 0:1] + ratio * dy[:, None]).astype(cp.int32)
-    x = cp.rint(start[:, 1:2] + ratio * dx[:, None]).astype(cp.int32)
-
-    lines = cp.stack((y, x), axis=-1)  # (N, max_len, 2)
-    return lines
+from matplotlib.lines import Line2D
+from PIL import Image
+from torchvision import transforms
 
 def generate_wall_mask(png_path):
+    """
+    从 RGB 图像生成墙体掩码（墙体区域为1）。
+    """
     img = Image.open(png_path).convert("RGB")
     rgb_tensor = transforms.ToTensor()(img)
     R, G = rgb_tensor[0].numpy(), rgb_tensor[1].numpy()
     return ((R != 0) | (G != 0)).astype(np.uint8)
 
-def generate_hit_map(wall_mask, tx_x, tx_y):
-    H, W = wall_mask.shape
-    wall_gpu = cp.asarray(wall_mask, dtype=cp.uint8)
-
-    x, y = cp.meshgrid(cp.arange(H), cp.arange(W), indexing='ij')
-    all_points = cp.stack((x.ravel(), y.ravel()), axis=1).astype(cp.int32)
-
-    # Ensure tx_x, tx_y are plain Python ints
-    tx_x = int(tx_x)
-    tx_y = int(tx_y)
-    tx = cp.array([[tx_x, tx_y]], dtype=cp.int32) 
-    tx_batch = cp.repeat(tx, all_points.shape[0], axis=0)
-
-    lines = _bresenhamlines_integer(all_points, tx_batch)  # (N, L, 2)
-    N, L = lines.shape[:2]
-
-    ys, xs = lines[..., 0], lines[..., 1]
-    valid = (ys >= 0) & (ys < H) & (xs >= 0) & (xs < W)
-    flat_idx = ys * W + xs
-    flat_idx[~valid] = 0  # out-of-bound locations set to 0 index
-
-    flat_vals = wall_gpu.ravel()[flat_idx]
-    flat_vals[~valid] = 0
-    flat_vals = flat_vals.reshape(N, L)
-
-    hits = cp.sum((flat_vals[:, 1:] - flat_vals[:, :-1]) == 1, axis=1)
-    return cp.asnumpy(hits.reshape(H, W))
-
-def process_all(inputs_dir, positions_dir, output_dir):
-    inputs_dir = Path(inputs_dir)
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    all_images = sorted(inputs_dir.glob("*.png"))
-
-    for img_path in tqdm(all_images, desc="Generating Hit Maps"):
-        try:
-            fname = img_path.stem
-            scene, s_idx = '_'.join(fname.split('_')[:-1]), int(fname.split('_')[-1][1:])
-            pos_path = Path(positions_dir) / f"Positions_{scene}.csv"
-            df = pd.read_csv(pos_path)
-            tx_x = int(df.loc[s_idx, "X"].item())
-            tx_y = int(df.loc[s_idx, "Y"].item())
-
-            wall_mask = generate_wall_mask(img_path)
-            hit_map = generate_hit_map(wall_mask, tx_x, tx_y)
-            np.save(output_dir / f"{scene}_S{s_idx}_hit.npy", hit_map)
-
-        except Exception as e:
-            print(f"[ERROR] {img_path.name}: {e}")
-
 def plot_ocm_with_wall_points(npy_path, rgb_path, tx_x=None, tx_y=None, save_path=None):
     """
-    Plot obstruction count map with purple wall markers and cyan Tx point.
+    绘制 Obstruction Count Map，并标注墙体与 TX 位置。
     
     Args:
-        npy_path: path to .npy obstruction count map
-        rgb_path: path to .png RGB input (for wall extraction)
-        tx_x, tx_y: Transmitter coordinates (row=x, col=y)
-        save_path: optional file path to save the figure
+        npy_path: .npy 格式的 HitMap 文件路径
+        rgb_path: RGB 图像路径，用于生成墙体轮廓
+        tx_x, tx_y: 发射器位置（图像中坐标）
+        save_path: 可选，若提供则保存图像
     """
     rcParams['font.family'] = 'Times New Roman'
 
-    # Load and normalize obstruction count map
+    # === 加载并归一化 hitmap ===
     oc_map = np.load(npy_path)
     oc_map = np.clip(oc_map, 0, 20)
     oc_norm = oc_map / oc_map.max()
 
-    # Get RGB image from colormap
+    # 获取热力图 RGB
     cmap = plt.get_cmap('hot')
     oc_rgb = cmap(oc_norm)[..., :3]
 
-    # Generate wall mask and get wall coordinates
+    # 生成墙体掩码
     wall_mask = generate_wall_mask(rgb_path)
-    wall_coords = np.argwhere(wall_mask == 1)  # shape: (N, 2)
-    wall_x = wall_coords[:, 1]  # column
-    wall_y = wall_coords[:, 0]  # row
 
-    # Start plotting
+    # === 开始绘图 ===
     fig, ax = plt.subplots(figsize=(5, 6))
-    im = ax.imshow(oc_rgb)
+    ax.imshow(oc_rgb)
 
-    # Wall scatter (purple square)
-    wall_handle = ax.scatter(wall_x, wall_y, s=3, color='white', marker='s', label='Wall')
+    # 墙体轮廓线（白色）
+    ax.contour(wall_mask, levels=[0.5], colors='white', linewidths=0.5)
 
-    # Tx scatter (cyan circle)
+    # 图例句柄列表
+    handles = [
+        Line2D([0], [0], color='white', linewidth=0.5, label='Wall')
+    ]
+
+    # 发射器点（TX）
     if tx_x is not None and tx_y is not None:
-        tx_handle = ax.scatter(tx_y, tx_x, color='cyan', s=100, marker='x',edgecolors='cyan',
+        tx_handle = ax.scatter(tx_y, tx_x, color='cyan', s=100, marker='x',
                                linewidths=1.5, label='Tx')
+        handles.append(tx_handle)
 
-    # Colorbar
+    # 添加图例
+    ax.legend(handles=handles, loc='upper left', fontsize=12, frameon=True, facecolor='white')
+
+    # 色条设置
     sm = plt.cm.ScalarMappable(cmap='hot', norm=plt.Normalize(vmin=0, vmax=oc_map.max()))
     sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax, fraction=0.1, pad=0.04)
-    cbar.set_label("Obstruction Countings", fontsize=30)
+    cbar = fig.colorbar(sm, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Obstruction Count", fontsize=12)
 
-    # Title and legend
-    ax.set_title("Obstruction Counts Map", fontsize=40)
-    ax.legend(loc='upper left', fontsize=40, frameon=True, facecolor='None')
+    # 标题和布局
+    ax.set_title("Obstruction Count Map", fontsize=14, fontweight='bold')
     ax.axis('off')
     plt.tight_layout()
 
-    # Save or show
+    # 保存或显示
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()
     else:
         plt.show()
 
-if __name__ == "__main__":
-    cp.cuda.Device(0).use()
-    #process_all("inputs", "Positions", "hitmap")
-
-    plot_ocm_with_wall_points(
-        npy_path="hitmap/B1_Ant1_f2_S0_hit.npy",
-        rgb_path="inputs/B1_Ant1_f2_S0.png",
-        tx_x=248, tx_y=81
-    )
-
-
+plot_ocm_with_wall_points(
+    npy_path="hitmap/B1_Ant1_f2_S0_hit.npy",
+    rgb_path="inputs/B1_Ant1_f2_S0.png",
+    tx_x=248,
+    tx_y=81,
+    save_path=None  # 或填入 "output.png"
+)
