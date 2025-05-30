@@ -1,4 +1,4 @@
-Unet with Reflection, Tsum+fspl, log-scale distance, sampled point GT, hitmaps as imput channels (5 channels)
+Unet with Reflection, Tsum+fspl, log-scale distance, sampled point GT, hitmaps as input channels (5 channels)
 ### Run training
 - Add the dataset (including inputs, outputs and Positions).
 - Run generate_samples.py to generate samples under different sparse sampling rate.
